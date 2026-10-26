@@ -7,6 +7,14 @@ export const COMPRESSION_LEVELS = ['without', 'detailed', 'compact', 'maximum'] 
 export type CompressionLevel = (typeof COMPRESSION_LEVELS)[number];
 export const DEFAULT_COMPRESSION_LEVEL: CompressionLevel = 'compact';
 
+export const EXPORT_PROFILES = ['standard', 'agent-context'] as const;
+export type ExportProfile = (typeof EXPORT_PROFILES)[number];
+export interface ExportPresentation {
+  profile?: ExportProfile;
+  /** Trusted, source-independent capture notices, supplied by the capture pipeline. */
+  warnings?: readonly string[];
+}
+
 export const EXPORT_FORMATS = [
   'semantic-text',
   'markdown',

@@ -14,7 +14,7 @@ export interface RedactionResult {
   redactionCount: number;
 }
 
-const SENSITIVE_FIELD_NAME = /\b(?:password|passcode|secret|token|api[ _-]?key|authorization)\b/iu;
+import { SENSITIVE_FIELD_NAME } from './sensitive-fields';
 const AUTHORIZATION_VALUE = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}\b/gu;
 const JWT = /\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\b/gu;
 const GITHUB_TOKEN = /\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/gu;
@@ -211,6 +211,7 @@ export function redactSemanticTree(tree: SemanticTree, settings: RedactionSettin
       children: node.children.map((child) => redactNode(child, insideSensitiveField || sensitiveField, phoneField, fieldMask)),
     };
     if (node.id !== undefined) result.id = node.id;
+    if (node.actionRef !== undefined) result.actionRef = node.actionRef;
     if (node.name !== undefined) result.name = insideSensitiveField ? redactFieldText(node.name) : redactText(node.name, insidePhoneField, insideMaskedField);
     if (node.value !== undefined) {
       if (sensitiveField || insideSensitiveField) {

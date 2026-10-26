@@ -308,6 +308,88 @@
     "TechnicalLogClearAllowed": {
       "type": "boolean",
       "description": "Allow manual technical-journal clearing. Default: true. Automatic retention still applies."
+    },
+    "McpAllowed": {
+      "type": "boolean",
+      "description": "Allow explicitly authorized external MCP connections. Does not enable MCP automatically."
+    },
+    "McpSettingsLocked": {
+      "type": "boolean",
+      "description": "Lock personal MCP connection and export settings. Stop and revoke remain available."
+    },
+    "McpTestAllowed": {
+      "type": "boolean",
+      "description": "Allow local MCP output tests, also subject to PreviewAllowed."
+    },
+    "McpAllowedModes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "read-only",
+          "read-write"
+        ]
+      },
+      "description": "Allowed MCP capabilities; an empty list denies all."
+    },
+    "McpAllowedActions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "click",
+          "fill",
+          "select-option",
+          "set-checked"
+        ]
+      },
+      "description": "Allowed MCP capabilities; an empty list denies all."
+    },
+    "McpDefaultMode": {
+      "type": "string",
+      "enum": [
+        "read-only",
+        "read-write"
+      ]
+    },
+    "McpWriteApproval": {
+      "type": "string",
+      "description": "Use each-action to require approval before every MCP action. If unset or session, users may choose bounded connection approval; the user default remains each-action.",
+      "enum": [
+        "each-action",
+        "session"
+      ]
+    },
+    "McpAllowedClientIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Additional MCP restriction; never expands general permissions."
+    },
+    "McpAllowedCaptureSources": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Additional MCP restriction; never expands general permissions."
+    },
+    "McpBlockedCaptureSources": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Additional MCP restriction; never expands general permissions."
+    },
+    "McpMaxSessionMinutes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 480
+    },
+    "McpMaxResponseKiB": {
+      "type": "integer",
+      "minimum": 64,
+      "maximum": 16384
     }
   }
 }

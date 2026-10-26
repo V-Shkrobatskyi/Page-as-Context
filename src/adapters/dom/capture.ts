@@ -18,6 +18,7 @@ export interface DomCaptureOptions {
   embedded?: boolean;
   includeFrame?: (element: Element) => boolean;
   onFrame?: (element: Element, node: SemanticNode) => void;
+  onNode?: (element: Element, node: SemanticNode) => void;
   reportWork?: (work: DomCaptureWork) => void;
 }
 
@@ -199,6 +200,7 @@ export function captureDomPage(doc: Document, limits: DomCaptureLimits = DOM_CAP
             if (['http:', 'https:', 'mailto:', 'tel:'].includes(url.protocol)) output.href = text(url.href);
           } catch { /* Invalid links are omitted without exposing their raw value. */ }
         }
+        options.onNode?.(element, output);
         parent.children.push(output); container = output;
         if (frame) {
           if (options.onFrame) {

@@ -132,6 +132,7 @@ function cloneNode(
   };
 
   if (node.id !== undefined) clone.id = node.id;
+  if (node.actionRef !== undefined) clone.actionRef = node.actionRef;
   if (node.name !== undefined) clone.name = node.name;
   if (node.value !== undefined) clone.value = node.value;
   if (node.level !== undefined) clone.level = node.level;

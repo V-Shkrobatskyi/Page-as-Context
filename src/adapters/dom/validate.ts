@@ -42,7 +42,8 @@ export function isDomCaptureOutcome(value: unknown, embedded = false, expectedDe
     const { node, depth } = stack.pop()!;
     if (seen.has(node) || seen.size >= DOM_CAPTURE_LIMITS.maxNodes || depth > DOM_CAPTURE_LIMITS.maxDepth + 1) return false;
     seen.add(node);
-    if (!onlyKeys(node, ['role', 'name', 'value', 'href', 'id', 'level', 'states', 'children', 'editable'])) return false;
+    if (!onlyKeys(node, ['role', 'name', 'value', 'href', 'id', 'level', 'states', 'children', 'editable', 'actionRef'])) return false;
+    if (node.actionRef !== undefined && (typeof node.actionRef !== 'string' || !/^[a-f0-9-]{36}$/u.test(node.actionRef))) return false;
     if (node.editable !== undefined && typeof node.editable !== 'boolean') return false;
     if (typeof node.role !== 'string' || !node.role || !validText(node.role) ||
       !validText(node.name) || !validText(node.value) || !validText(node.href) || !validText(node.id) ||

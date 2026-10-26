@@ -84,3 +84,7 @@ Keep private page content and account details out of screenshots. See the
 Page as Context is the new name of Copy as Context. Update the existing store listings; do not create new listings or change the Firefox add-on ID. Repository, store and support links retain their current addresses until those external destinations are updated.
 
 The `popup-settings` storage key is unchanged from version 1.1.0. Theme keys and portable filter formats were introduced after that release and now use the `page-as-context` prefix. Files from unpublished development builds must be exported with the new build or recreated.
+
+## MCP disclosure update for the next store submission
+
+Optional MCP shares filtered content from one explicitly connected tab with an external client through a separately installed local helper. The client may transmit it to its model provider. Read and write adds browser-approved native-control interactions. No developer-hosted capture service or analytics is introduced. Declare optional nativeMessaging, the additional debugger/scripting use, and Firefox optional websiteContent/browsingActivity/personalCommunications transmission consent, plus websiteActivity for write mode. Validate store forms and real consent prompts before publication; published store names and extension IDs are unchanged.

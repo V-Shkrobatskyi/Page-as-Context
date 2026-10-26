@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.6.0 — unreleased
+## 2.0.0 — unreleased
+
+- Add optional local MCP integration for explicitly shared Chrome and Firefox tabs, with read-only and read/write modes, pairing, per-tab grants, action approvals, Stop and Revoke.
+- Apply shared privacy filters, data controls and organization policies to MCP context and supported page actions.
+- Add MCP settings and approval pages, local output previews, and a private ChatGPT desktop plugin with in-chat browser setup.
+
+## 1.6.0
 
 - Rename the extension to Page as Context with the popup subtitle "Structured browser context for AI."
 - Rename internal branding and file formats while preserving the published extension ID and popup preferences.

@@ -31,7 +31,7 @@ describe('Chrome managed schema compatibility', () => {
     expect(schema.properties.DisabledBuiltinFilters.items.enum).toEqual(BUILTIN_FILTERS.map(filter => filter.id));
   });
   it('keeps every documented preset valid at the runtime boundary', () => {
-    for (const file of ['recommended.json', 'required-redaction.json', 'strict.json', 'builtin-filters.json', 'data-controls.json']) {
+    for (const file of ['recommended.json', 'required-redaction.json', 'strict.json', 'builtin-filters.json', 'data-controls.json', 'mcp-read-only.json']) {
       const preset = JSON.parse(readFileSync(`docs/enterprise/${file}`, 'utf8'));
       expect(() => validatePolicy(preset)).not.toThrow();
       for (const key of Object.keys(preset)) expect(schema.properties).toHaveProperty(key);

@@ -1,0 +1,7 @@
+Page as Context helper is licensed GPL-3.0-only; see LICENSE.
+
+@modelcontextprotocol/sdk 1.32.2 — MIT — Copyright (c) 2024 Anthropic, PBC.
+The complete SDK license is included in MCP_SDK_LICENSE.
+The exact transitive dependency graph and integrity hashes are in package-lock.json.
+Installed dependencies retain their respective LICENSE files. This development
+package requires Node.js 24.10.x; Node.js is not bundled.

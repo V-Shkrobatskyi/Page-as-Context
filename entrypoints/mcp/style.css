@@ -1,0 +1,61 @@
+/* Copyright (c) 2026 Vitalii Shkrobatskyi; SPDX-License-Identifier: GPL-3.0-only */
+@import '../../public/page-theme.css';
+
+.mcp-content .mcp-section { margin-top: 32px; }
+.mcp-content .section-description { color: var(--muted); }
+.mcp-content .settings-panel { padding: 16px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
+.mcp-content .privacy-note { padding: 12px 16px; border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; background: var(--surface); color: var(--muted); font-size: .875rem; }
+.mcp-content .status-message { padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px; overflow-wrap: anywhere; font-size: .9rem; }
+.mcp-content .status-message:empty { display: none; }
+.mcp-content .access-status-bar { position: sticky; top: var(--site-header-height, 0px); z-index: 9; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.mcp-content .access-status-bar .status-message { flex: 1 1 280px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.mcp-content .access-status-bar button { flex: 0 0 auto; }
+.content-page .mcp-content h2[id] { scroll-margin-top: calc(var(--site-header-height, 0px) + 144px); }
+.mcp-content .connection-status { font-weight: 650; }
+.mcp-content .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; margin-top: 16px; }
+.mcp-content .settings-grid > label { min-width: 0; font-size: .9rem; font-weight: 600; }
+.mcp-content select { display: block; width: 100%; min-width: 0; min-height: 36px; margin-top: 6px; padding: 7px 9px; border: 1px solid light-dark(#a5b5ce, #60769a); border-radius: 6px; background: light-dark(#fff, #192333); color: var(--text); font: inherit; text-overflow: ellipsis; }
+.mcp-content .check-option { display: flex; align-items: flex-start; gap: 10px; font-size: .9rem; line-height: 1.5; }
+.mcp-content input[type='checkbox'] { flex: none; width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--accent); }
+.mcp-content #redact { margin-top: 3px; }
+.mcp-content .settings-grid + .check-option { margin-top: 16px; }
+.mcp-content .note, .mcp-content .empty-state { color: var(--muted); font-size: .875rem; line-height: 1.5; }
+.mcp-content p.note { margin: 12px 0 0; }
+.mcp-content .action-group, .mcp-content .apply-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.mcp-content .apply-bar { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.mcp-content button { min-height: 36px; max-width: 100%; padding: 7px 12px; border: 1px solid light-dark(#a5b5ce, #60769a); border-radius: 8px; background: light-dark(#fff, #202e44); color: var(--text); font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; }
+.mcp-content button.primary-action { border-color: var(--accent); background: var(--accent); color: #fff; }
+.mcp-content button:disabled, .mcp-content select:disabled, .mcp-content input:disabled { opacity: .55; cursor: default; }
+.mcp-content button:active:not(:disabled) { transform: translateY(1px); }
+.mcp-content .connection-details { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.mcp-content summary { cursor: pointer; font-size: .9rem; font-weight: 600; }
+.mcp-content .instance-id { margin: 12px 0 0; overflow-wrap: anywhere; color: var(--muted); font: .8125rem/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.mcp-content .write-grant { margin-top: 16px; }
+.mcp-content .connection-list { white-space: pre-line; overflow-wrap: anywhere; font-size: .875rem; }
+.mcp-content .connection-list:not(:empty) { margin: 16px 0 0; padding-top: 16px; border-top: 1px solid var(--border); }
+.mcp-content .connection-list:empty, .mcp-content #captured:empty { display: none; }
+.mcp-content .client-panel + .client-panel { margin-top: 12px; }
+.mcp-content .client-panel h3 { margin: 0 0 8px; font-size: 1rem; }
+.mcp-content .client-panel .empty-state { margin: 16px 0 0; }
+.mcp-content .client-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--border); }
+.mcp-content .client-identity { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; font: .8125rem/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.mcp-content .client-name, .mcp-content .client-id, .mcp-content .client-tab { display: block; }
+.mcp-content .client-name { margin-bottom: 4px; font: 600 .95rem/1.5 system-ui, sans-serif; }
+.mcp-content .client-tab { margin-top: 6px; color: var(--muted); font: .875rem/1.5 system-ui, sans-serif; }
+.mcp-content .client-name-editor { flex: 1 1 100%; min-width: 0; }
+.mcp-content .client-name-editor label { display: block; margin: 12px 0; font-size: .875rem; }
+.mcp-content .client-name-editor input { display: block; width: 100%; margin-top: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--text); font: inherit; }
+.mcp-content .output-label { display: block; margin: 16px 0 6px; font-size: .9rem; font-weight: 600; }
+.mcp-content textarea { display: block; width: 100%; min-height: 260px; padding: 12px; resize: vertical; border: 1px solid light-dark(#a5b5ce, #60769a); border-radius: 6px; background: light-dark(#fff, #192333); color: var(--text); font: 13px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; tab-size: 2; }
+.mcp-content textarea::placeholder { color: var(--muted); opacity: 1; }
+@media (hover: hover) and (pointer: fine) {
+  .mcp-content button:hover:not(:disabled) { background: var(--selected); }
+  .mcp-content button.primary-action:hover:not(:disabled) { background: var(--accent-hover); }
+}
+@media (max-width: 600px) {
+  .mcp-content .settings-panel { padding: 12px; }
+  .mcp-content .settings-grid { grid-template-columns: minmax(0, 1fr); }
+  .mcp-content .action-group > button { flex: 1 1 auto; min-height: 44px; }
+  .mcp-content select, .mcp-content textarea { font-size: 16px; }
+  .mcp-content .client-row > .action-group { width: 100%; }
+}

@@ -91,12 +91,13 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     </header>
     <p id="organization-policy" class="field-note" role="status" hidden></p>
     <button id="retry-policy" type="button" hidden>Retry organization policies</button>
-    <section class="action-section" aria-label="Export page context">
+    <section class="action-section" aria-label="Page context actions">
       <div class="actions">
         <button class="primary-action" type="button"><svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg><span>Copy context</span></button>
         <button class="secondary-action" type="button"><svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg><span id="save-label">Save to file</span></button>
-        <button id="preview" class="preview-action" type="button"><svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span>Preview &amp; edit</span></button>
-        <button id="select-element" class="preview-action" type="button"><svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7"/><path d="M12 2v5m0 10v5M2 12h5m10 0h5"/></svg><span>Select element</span></button>
+        <button id="preview" class="preview-action" type="button" title="Preview and edit context" aria-label="Preview and edit context"><svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span>Preview</span></button>
+        <button id="select-element" class="preview-action" type="button" title="Select an element to capture" aria-label="Select an element to capture"><svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7"/><path d="M12 2v5m0 10v5M2 12h5m10 0h5"/></svg><span>Select</span></button>
+        <button id="mcp-connect" class="preview-action" type="button" title="Connect this tab to MCP" aria-label="Connect this tab to MCP"><svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m10 13 4-4m-6 6-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 2 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/></svg><span>Connect MCP</span></button>
       </div>
     </section>
     <section class="settings-panel" aria-label="Export preferences">
@@ -567,3 +568,11 @@ async function initializeFirefoxPlatform(): Promise<void> {
   }
 }
 void initializeFirefoxPlatform();
+
+const mcpConnect = document.querySelector<HTMLButtonElement>('#mcp-connect');
+mcpConnect?.addEventListener('click', () => {
+  mcpConnect.disabled = true;
+  void browser.runtime.sendMessage({ type: 'mcp-ui-v1', action: 'source' }).then(result => {
+    if (result?.ok) window.close(); else { mcpConnect.disabled = false; status.textContent = 'MCP is unavailable for this page or organization policy.'; }
+  }, () => { mcpConnect.disabled = false; status.textContent = 'Unable to open MCP settings.'; });
+});

@@ -35,3 +35,6 @@ web-ext.config.ts
 
 dev_notes/
 AGENTS.md
+
+# Generated desktop MCP packages and downloaded build runtimes
+artifacts/mcp/

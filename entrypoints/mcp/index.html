@@ -1,0 +1,170 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Vitalii Shkrobatskyi; SPDX-License-Identifier: GPL-3.0-only -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MCP integration — Page as Context</title>
+  <link rel="stylesheet" href="/page-theme.css" />
+  <link rel="stylesheet" href="/page-layout.css" />
+  <link rel="stylesheet" href="/page-navigation.css" />
+  <script src="/theme.js"></script>
+</head>
+<body class="content-page">
+  <header class="site-header">
+    <div class="site-brand"><img src="/icon/48.png" width="32" height="32" alt="" /><span>Page as Context</span></div>
+    <nav class="site-nav" aria-label="Main navigation">
+      <div class="site-nav-primary">
+        <a href="/filters.html">Filters</a>
+        <a href="/data-controls.html">Data controls</a>
+        <a href="/mcp.html" aria-current="page">MCP</a>
+        <a href="/guide.html">Guide</a>
+      </div>
+      <div class="site-nav-secondary"><a href="/privacy.html">Privacy</a> <a href="/license.html">License</a> <a href="https://github.com/V-Shkrobatskyi/Copy-as-Context" target="_blank" rel="noopener noreferrer">GitHub ↗</a></div>
+
+      <label class="theme-picker">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none"/></svg>
+        <span aria-hidden="true">Theme</span>
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+        <select data-theme-picker aria-label="Color theme">
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+    </nav>
+  </header>
+  <div class="page-layout">
+    <nav class="page-toc" aria-label="MCP contents">
+      <div class="toc-desktop">
+        <p>On this page</p>
+        <ul>
+            <li><a href="#access-heading">Access and approval</a></li>
+            <li><a href="#context-heading">Context settings</a></li>
+            <li><a href="#connection-heading">Helper connection</a></li>
+            <li><a href="#source-heading">Selected tab</a></li>
+            <li><a href="#clients-heading">Pairing and clients</a></li>
+            <li><a href="#test-heading">Test MCP output</a></li>
+        </ul>
+      </div>
+      <details class="toc-mobile">
+        <summary>On this page</summary>
+        <ul>
+            <li><a href="#access-heading">Access and approval</a></li>
+            <li><a href="#context-heading">Context settings</a></li>
+            <li><a href="#connection-heading">Helper connection</a></li>
+            <li><a href="#source-heading">Selected tab</a></li>
+            <li><a href="#clients-heading">Pairing and clients</a></li>
+            <li><a href="#test-heading">Test MCP output</a></li>
+        </ul>
+      </details>
+    </nav>
+    <main class="page-main mcp-content">
+      <header>
+        <h1>MCP integration</h1>
+        <p class="intro">Share filtered context from a tab you choose with an external AI assistant.</p>
+      </header>
+      <p class="privacy-note">Your AI client may forward shared context to its model provider. Stop or revoke ends access, but cannot recall data already delivered.</p>
+      <div class="access-status-bar" role="group" aria-label="MCP status and access control">
+        <p id="status" class="status-message" role="status" aria-live="polite" aria-atomic="true">Loading…</p>
+        <button id="stop" type="button">Stop all MCP access</button>
+      </div>
+
+      <form id="preferences">
+        <section class="mcp-section" aria-labelledby="access-heading">
+          <h2 id="access-heading">Access and approval</h2>
+          <div class="settings-panel">
+            <label class="check-option"><input id="enabled" type="checkbox" /><span>Enable MCP</span></label>
+            <div class="settings-grid">
+              <label for="mode">Mode<select id="mode" aria-describedby="mode-note"><option value="read-only">Read only</option><option value="read-write">Read and write</option></select></label>
+              <label for="write-approval">Write approval<select id="write-approval" aria-describedby="mode-note"><option value="each-action">Ask before each action</option><option value="session">Allow for this connection</option></select></label>
+            </div>
+            <p id="mode-note" class="note">Read only shares context. Read and write also allows supported page actions with a separate tab grant. Allow for this connection skips repeated extension approval prompts for that connection only; access ends on navigation, expiry or disconnection. Your organization may require approval before each action.</p>
+            <div class="apply-bar">
+              <button type="submit" id="apply-access" class="primary-action">Apply settings</button>
+              <span id="draft-state-access" class="note" role="status">Applied</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="mcp-section" aria-labelledby="context-heading">
+          <h2 id="context-heading">Context settings</h2>
+          <p class="section-description">Shared privacy filters, data controls and organization restrictions always apply.</p>
+          <div class="settings-panel">
+            <label class="check-option"><input id="inherit" type="checkbox" checked /><span>Use extension export settings</span></label>
+            <div class="settings-grid">
+              <label for="format">Format<select id="format"><option value="semantic-text">Semantic Text</option><option value="markdown">Markdown</option></select></label>
+              <label for="compression">Compression<select id="compression"><option value="without">Without</option><option value="detailed">Detailed</option><option value="compact">Compact</option><option value="maximum">Maximum</option></select></label>
+            </div>
+            <label class="check-option"><input id="redact" type="checkbox" checked /><span>Redact sensitive data</span></label>
+            <p id="managed-filters" class="note"></p>
+            <p class="note">Editing shared filters also changes ordinary exports. <a id="filters" href="/filters.html#return=mcp">Customize filters / Add custom filter</a> · <a href="/data-controls.html">Data controls</a></p>
+            <div class="apply-bar">
+              <button type="submit" id="apply" class="primary-action">Apply settings</button>
+              <span id="draft-state" class="note" role="status">Applied</span>
+            </div>
+          </div>
+        </section>
+      </form>
+
+      <section class="mcp-section" aria-labelledby="connection-heading">
+        <h2 id="connection-heading">Helper connection</h2>
+        <p class="section-description">The separate local helper connects your browser to the AI client. Enable MCP and apply your settings before starting it.</p>
+        <div class="settings-panel">
+          <p id="transport" class="connection-status">Checking helper…</p>
+          <div class="action-group">
+            <button id="start" class="primary-action" type="button" disabled>Start helper connection</button>
+            <button id="refresh" type="button">Refresh status</button>
+          </div>
+          <details class="connection-details">
+            <summary>Setup and browser instance</summary>
+            <p class="note">Ask the Page as Context plugin in your AI client to set up this browser. Review the setup plan, then compare the pairing code from the chat with the request below. The local bridge starts automatically after setup. Follow the <a href="/guide.html#mcp-integration">local setup guide</a> or the <a href="https://github.com/V-Shkrobatskyi/Page-as-Context/blob/main/docs/mcp-integration.md" target="_blank" rel="noopener noreferrer">full setup instructions ↗</a>. Use this instance when pairing a client.</p>
+            <p id="instance" class="instance-id"></p>
+          </details>
+        </div>
+      </section>
+
+      <section class="mcp-section" aria-labelledby="source-heading">
+        <h2 id="source-heading">Selected tab</h2>
+        <div class="settings-panel">
+          <p id="source">Open the extension popup on the page you want to share and choose Connect MCP. This settings page is never used as the source.</p>
+          <label class="check-option write-grant"><input type="checkbox" id="allow-write" aria-describedby="write-note" /><span>Allow supported actions when connecting a client to this tab</span></label>
+          <p id="write-note" class="note">Only available in Read and write mode. Access ends when the connection expires. Clicks can submit data or cause irreversible changes.</p>
+          <p id="connections" class="connection-list"></p>
+        </div>
+      </section>
+
+      <section class="mcp-section" aria-labelledby="clients-heading">
+        <h2 id="clients-heading">Pairing and clients</h2>
+        <div class="settings-panel client-panel">
+          <h3>Pairing requests</h3>
+          <p class="note">Compare the code with your helper before approving. Client names are self-declared; approve only a pairing you initiated.</p>
+          <div id="pairing"><p class="empty-state">No pending pairing requests.</p></div>
+        </div>
+        <div class="settings-panel client-panel">
+          <h3>Approved clients</h3>
+          <p class="note">Choose a client to connect the selected tab, or revoke its access.</p>
+          <div id="clients"><p class="empty-state">No approved clients yet. Pair a client through the helper to get started.</p></div>
+        </div>
+      </section>
+
+      <section class="mcp-section" aria-labelledby="test-heading">
+        <h2 id="test-heading">Test MCP output</h2>
+        <p class="section-description">Check the filtered result before sharing. This local test needs no helper, grants no external access and sends nothing to a model.</p>
+        <div class="settings-panel">
+          <div class="action-group">
+            <button id="test" class="primary-action" type="button" disabled>Test MCP output</button>
+            <button id="copy" type="button" disabled>Copy test output</button>
+            <button id="save" type="button" disabled>Save test output</button>
+          </div>
+          <p id="captured" class="note" role="status"></p>
+          <label class="output-label" for="output">Sanitized MCP result</label>
+          <textarea id="output" rows="16" readonly spellcheck="false" placeholder="Select a source tab, then run a local test to see the result." aria-describedby="output-note"></textarea>
+          <p id="output-note" class="note">Test output uses your draft settings until you apply them. Capture again after page changes.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

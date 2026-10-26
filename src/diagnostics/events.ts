@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 export const LOG_LEVELS = ['off', 'error', 'info', 'debug'] as const;
 export type LogLevel = typeof LOG_LEVELS[number];
-export const EVENT_CODES = ['background-ready', 'capture-start', 'capture-complete', 'picker-start', 'picker-complete', 'preview-transfer', 'clipboard-complete', 'download-complete', 'filters-load', 'filters-save', 'policy-check'] as const;
+export const EVENT_CODES = ['mcp-read', 'mcp-write', 'background-ready', 'capture-start', 'capture-complete', 'picker-start', 'picker-complete', 'preview-transfer', 'clipboard-complete', 'download-complete', 'filters-load', 'filters-save', 'policy-check'] as const;
 export const REASONS = ['none', 'failed', 'cancelled', 'policy-blocked', 'permission-denied', 'capture-timeout', 'capture-limit', 'page-changed', 'invalid-tree', 'unsupported-page', 'debugger-busy', 'capture-failed', 'capture-unavailable', 'redaction-settings'] as const;
 export interface EventInput {
   code: typeof EVENT_CODES[number];
@@ -12,6 +12,7 @@ export interface EventInput {
   durationMs?: number;
 }
 export function eventComponent(code: EventInput['code']): string {
+  if (code.startsWith('mcp-')) return 'mcp';
   if (code.startsWith('capture')) return 'capture';
   if (code.startsWith('picker')) return 'picker';
   if (code.startsWith('filters')) return 'filters';

@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Vitalii Shkrobatskyi
 // SPDX-License-Identifier: GPL-3.0-only
 
+import type { ExportPresentation } from '../contracts';
+import { renderAgentHeader } from './agent-header';
 import { renderExportAttribution } from './attribution';
 import { createEncodingCounter } from './maximum-cost';
 import type { NodeStates, SemanticNode, SemanticTree, SerializedContext } from '..';
@@ -10,34 +12,35 @@ const STATE_ORDER: readonly (keyof NodeStates)[] = [
 ];
 
 /** Serializes an already-transformed semantic tree into stable, escaped Markdown. */
-export function serializeMarkdown(tree: SemanticTree, attribution = renderExportAttribution()): SerializedContext {
+export function serializeMarkdown(tree: SemanticTree, attribution = renderExportAttribution(), options: ExportPresentation = {}): SerializedContext {
   const lines: string[] = [];
-  render(tree, lines, undefined, attribution);
+  render(tree, lines, undefined, attribution, options);
   const content = `${lines.join('\n')}\n`;
   return { format: 'markdown', content, characterCount: content.length };
 }
 
 /** Counts characters and estimates cost together without retaining tree lines. */
-export function measureMarkdownEncoding(tree: SemanticTree, attribution = renderExportAttribution()): { characters: number; cost: number } {
+export function measureMarkdownEncoding(tree: SemanticTree, attribution = renderExportAttribution(), options: ExportPresentation = {}): { characters: number; cost: number } {
   const counter = createEncodingCounter();
-  const characters = render(tree, undefined, counter.add, attribution);
+  const characters = render(tree, undefined, counter.add, attribution, options);
   return { characters, cost: counter.total() };
 }
 
 /** Measures the exact same output without accumulating tree lines or a full string. */
-export function countMarkdownCharacters(tree: SemanticTree, attribution = renderExportAttribution()): number {
-  return render(tree, undefined, undefined, attribution);
+export function countMarkdownCharacters(tree: SemanticTree, attribution = renderExportAttribution(), options: ExportPresentation = {}): number {
+  return render(tree, undefined, undefined, attribution, options);
 }
 
-function render(tree: SemanticTree, lines?: string[], measure?: (line: string) => void, attribution = renderExportAttribution()): number {
+function render(tree: SemanticTree, lines?: string[], measure?: (line: string) => void, attribution = renderExportAttribution(), options: ExportPresentation = {}): number {
   const headers = lines ?? [];
-  renderMarkdownHeader(tree, headers, attribution);
+  renderMarkdownHeader(tree, headers, attribution, options);
   for (const line of headers) measure?.(line);
   const headerCount = headers.reduce((count, line) => count + line.length + 1, 0);
   return headerCount + renderNode(tree.root, 0, lines, measure);
 }
 
-export function renderMarkdownHeader(tree: SemanticTree, lines: string[], attribution = renderExportAttribution()): void {
+export function renderMarkdownHeader(tree: SemanticTree, lines: string[], attribution = renderExportAttribution(), options: ExportPresentation = {}): void {
+  if (renderAgentHeader(tree, lines, options, true)) return;
   if (tree.sourceUrl === undefined && tree.capturedAt === undefined) {
     if (tree.title !== undefined) lines.push(`# ${escapeText(tree.title)}`, '');
     return;
@@ -53,6 +56,7 @@ export function renderMarkdownHeader(tree: SemanticTree, lines: string[], attrib
 
 function renderNode(node: SemanticNode, depth: number, lines?: string[], measure?: (line: string) => void): number {
   const attributes: string[] = [];
+  if (node.actionRef !== undefined) attributes.push(`ref=${code(node.actionRef)}`);
   if (node.value !== undefined) attributes.push(`value=${code(node.value)}`);
   for (const state of STATE_ORDER) {
     const value = node.states?.[state];

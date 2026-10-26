@@ -13,8 +13,10 @@ import { normalizeChromeAxTree } from './normalize-ax';
 import type { ChromeAxNode, ChromeAxTreeResponse } from './types';
 import { selectedDomIds, selectChromeAxTree } from './selection';
 import { selectedElementReference } from '../../element-picker-protocol';
+import { rememberChromeTarget } from './actions';
 
 interface Session {
+  targetId?: string;
   id?: string;
   live: boolean;
   ax: boolean;
@@ -189,7 +191,8 @@ export function createFrameCapturer(client: ChromeDebuggerClient) {
         if (record(params.targetInfo).type !== 'iframe') return;
         if (sessions.has(params.sessionId)) return;
         if (sessions.size >= LIMITS.documents) { partial = true; return; }
-        const session: Session = { id: params.sessionId, live: true, ax: false, auto: false };
+        const session: Session = { id: params.sessionId, live: true, ax: false, auto: false,
+          ...(typeof record(params.targetInfo).targetId === 'string' ? { targetId: record(params.targetInfo).targetId as string } : {}) };
         sessions.set(params.sessionId, session);
         const task = initialize(session).catch(() => { session.live = false; partial = true; });
         setup.add(task);
@@ -499,6 +502,9 @@ export function createFrameCapturer(client: ChromeDebuggerClient) {
         const normalized = normalizeChromeAxTree(frame.snapshot, {
           frameId: frame.id,
           onNode(raw, node) {
+            if (controls?.actions && (!frame.parentId || frame.origin && rootId && frame.origin === frames.get(rootId)?.origin)) {
+              rememberChromeTarget(controls.actions, raw, node, { id: frame.id, loaderId: frame.loaderId, targetId: frame.session.targetId });
+            }
             if (raw.backendDOMNodeId !== undefined) owners.set(raw.backendDOMNodeId, node);
             if (raw.role?.value === 'Iframe' || raw.role?.value === 'IframePresentational') {
               node.role = 'embedded-document';

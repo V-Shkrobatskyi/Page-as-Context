@@ -19,7 +19,7 @@ Use the filenames generated for the version in `package.json`.
 | Android minimum | Firefox Android 142.0 |
 | Required permissions | activeTab, scripting, clipboardWrite, storage |
 | Optional permissions | downloads for Desktop Save; all HTTP/HTTPS hosts only when Include frames from other sites is enabled |
-| Data collection | `browser_specific_settings.gecko.data_collection_permissions.required: ["none"]` |
+| Data collection | Required: `["none"]`; optional MCP transmission: `websiteContent`, `browsingActivity`, `personalCommunications`, with `websiteActivity` for write mode |
 | License | GNU General Public License v3.0 only (GPL-3.0-only) |
 
 The manifest declarations are defined in `src/platform/manifest.ts`. Desktop

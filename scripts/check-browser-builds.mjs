@@ -92,7 +92,7 @@ for (const target of ['chrome', 'firefox']) {
   if (firefox) {
     assert.equal(manifest.minimum_chrome_version, undefined);
     assert.deepEqual([...manifest.permissions].sort(), ['activeTab', 'scripting', 'clipboardWrite', 'storage'].sort());
-    assert.deepEqual(manifest.optional_permissions, ['downloads']);
+    assert.deepEqual(manifest.optional_permissions, ['downloads', 'nativeMessaging']);
     assert.deepEqual(manifest.optional_host_permissions, ['http://*/*', 'https://*/*']);
     assert.ok((await readFile(new URL('frame-capture.js', directory), 'utf8')).includes('__pageAsContextFrames'), 'Missing isolated frame helper');
     assert.ok(manifest.background.scripts?.length);
@@ -101,6 +101,7 @@ for (const target of ['chrome', 'firefox']) {
     assert.equal(manifest.browser_specific_settings.gecko.strict_min_version, '140.0');
     assert.deepEqual(manifest.browser_specific_settings.gecko_android, { strict_min_version: '142.0' }, 'Incorrect Firefox target compatibility');
     assert.deepEqual(manifest.browser_specific_settings.gecko.data_collection_permissions.required, ['none']);
+    assert.deepEqual(manifest.browser_specific_settings.gecko.data_collection_permissions.optional, ['websiteContent', 'browsingActivity', 'personalCommunications', 'websiteActivity']);
     assert.ok(!source.includes('Accessibility.getFullAXTree'), 'Firefox includes Chrome AX capture');
     assert.ok(!source.includes('debugger.attach'), 'Firefox includes debugger attach');
     const collector = await readFile(new URL('dom-capture.js', directory), 'utf8');

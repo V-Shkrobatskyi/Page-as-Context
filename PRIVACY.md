@@ -1,6 +1,6 @@
 # Privacy policy for Page as Context
 
-Last updated: 2026-10-23. Applies to version 1.6.0.
+Last updated: 2026-10-26. Applies to version 2.0.0.
 
 ## Purpose and local processing
 
@@ -10,7 +10,7 @@ Page as Context exports semantic content from the active page for your AI conver
 
 An export can contain page text, title, URL, accessible labels, semantic roles, form values and states, capture time, browser/platform/version metadata when available, and the extension version and selected settings. This information can include personal or sensitive information present on the page. Chrome reads accessibility-tree snapshots of the main document and eligible embedded documents; Firefox reads HTML/ARIA semantics. Both browser builds omit password input values, including values in captured embedded documents.
 
-The extension uses this information only to create the export you request. It does not monitor your browsing history in the background or upload captured pages to the developer.
+The extension uses this information to create requested exports or respond to an explicitly authorized MCP connection. It does not monitor your browsing history in the background or upload captured pages to the developer.
 
 ## Storage and retention
 
@@ -35,6 +35,30 @@ Copy places the result on your clipboard. Desktop Save writes a UTF-8 file to a 
 
 You can change saved preferences in the popup or remove extension-local preferences by clearing the extension's data or uninstalling it. Delete exported files and clipboard/history entries separately using your browser, operating system, or destination application.
 
+## Optional MCP integration
+
+MCP is disabled by default. Enabling it, approving a local client and connecting
+one tab allows that client to request filtered page context until access expires
+or is revoked. The separately installed helper uses private local IPC and Native
+Messaging. The AI client may forward the context to its model provider. A local
+connection does not imply a local model. Previously delivered data cannot be
+recalled.
+
+Read and write additionally requires an explicit browser-side grant. Actions use
+short-lived references and browser approval by default. Native-control click,
+fill, selection and checkbox operations can submit data or cause irreversible
+site changes. Entered values are not saved in approval history or diagnostics.
+Post-action context is subject to the same filters and data controls as reads.
+Transient references, operation receipts and page payloads are not persisted.
+Pairing stores credential hashes in extension-local storage; the helper keeps
+credentials in protected local files. Stop/revoke clears live grants and refs;
+restarts never restore them. The helper retains credential files on uninstall
+for explicit user removal. The extension has no developer-hosted MCP backend.
+
+Firefox separately requests optional consent for website content, browsing
+activity and personal communications sent to the helper, plus website activity in write mode. Declining or revoking
+these permissions blocks MCP transmission while ordinary export remains usable.
+
 ## Sharing and external services
 
 The extension does not send captured page content, URLs, or preferences to the developer, sell user data, or use it for advertising. You decide whether to paste or upload an export into another application; that application then handles it under its own policies.
@@ -45,11 +69,12 @@ If you email a bug report or post a GitHub issue, the recipient/service receives
 
 ## Permissions
 
-- Chrome debugger: briefly reads the active page and eligible embedded documents after an export action, checks frame visibility and password input types, and detaches afterward.
+- Chrome debugger: briefly reads the active page and eligible embedded documents after an export action or authorized MCP request, checks frame visibility and password input types, and detaches afterward.
 - activeTab and scripting: obtain temporary page access and install the Desktop element picker on demand in both browsers. Firefox also uses these permissions to capture the current page and permitted embedded documents.
-- Firefox optional site access: Include frames from other sites is off by default. Enabling it requests access to all HTTP/HTTPS websites in one browser prompt. The permission persists across tabs and browser restarts; turning the option off removes site access, including earlier individual host grants. Capture runs only after an explicit Copy, Preview, or Desktop Save action, including actions for a selected element. Protected frames may remain unavailable.
+- Firefox optional site access: Include frames from other sites is off by default. Enabling it requests access to all HTTP/HTTPS websites in one browser prompt. The permission persists across tabs and browser restarts; turning the option off removes site access, including earlier individual host grants. Ordinary capture follows an explicit Copy, Preview or Desktop Save action; authorized MCP reads follow the separately granted connection. Protected frames may remain unavailable.
 - clipboardWrite: writes the export you request to your clipboard.
 - downloads (Desktop only): saves the export you request as a local file. In Firefox, this permission is optional and requested when you click Save; Android never requests it.
+- nativeMessaging (optional): connects only to the separately installed local helper after explicit MCP enablement and consent.
 - storage: persists export preferences and redaction filter settings locally.
 
 Persistent access to all HTTP/HTTPS websites is optional and requested only when you enable Include frames from other sites in Firefox.

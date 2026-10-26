@@ -15,6 +15,8 @@ export interface NodeStates {
 
 /** A normalized semantic node. It intentionally contains no browser/CDP details. */
 export interface SemanticNode {
+  /** Opaque, transient adapter reference. Never a selector or browser node ID. */
+  actionRef?: string;
   /** Adapter-identified editable content, before compression. */
   editable?: boolean;
   id?: string;

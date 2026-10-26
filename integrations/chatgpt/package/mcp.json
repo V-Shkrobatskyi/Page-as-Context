@@ -1,0 +1,17 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "browser-chrome": {
+      "type": "stdio",
+      "command": "./runtime/node",
+      "args": ["${PLUGIN_ROOT}/server.mjs", "chrome"],
+      "cwd": "${PLUGIN_ROOT}"
+    },
+    "browser-firefox": {
+      "type": "stdio",
+      "command": "./runtime/node",
+      "args": ["${PLUGIN_ROOT}/server.mjs", "firefox"],
+      "cwd": "${PLUGIN_ROOT}"
+    }
+  }
+}
