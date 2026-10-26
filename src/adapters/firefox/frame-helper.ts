@@ -9,6 +9,7 @@ import { frameVisibility } from './frame-visibility';
 import { FIREFOX_CAPTURE_LIMITS as LIMITS } from './limits';
 import type { FrameCommand, FrameHandler, FrameOwner, FrameSnapshot, FrameVerification } from './frame-contract';
 import type { PickerGlobal } from '../../element-picker-protocol';
+import { createDomActionRegistry } from './actions';
 
 interface OwnerRecord { element: Element; frameId: number; signature: string; changed: boolean; stop: () => void }
 interface Lease { generation: string; root: Element; selected?: Element; url: string; valid: boolean; inventoryChanged: boolean; owners: OwnerRecord[]; dispose: () => void; flush: () => void }
@@ -30,6 +31,7 @@ function sourceHost(element: Element): string {
 /** Each lease keeps structural references only, with explicit release and a fallback TTL. */
 export function createFrameHandler(doc: Document, frameId: (target: Element | Window) => number): FrameHandler {
   const leases = new Map<string, Lease>();
+  let rememberAction: ReturnType<typeof createDomActionRegistry> | undefined;
   return (command: FrameCommand): unknown => {
     if (!command || typeof command.operation !== 'string' || command.operation.length > 64) return undefined;
     const previous = leases.get(command.operation);
@@ -92,6 +94,10 @@ export function createFrameHandler(doc: Document, frameId: (target: Element | Wi
     leases.set(command.operation, lease);
     let work: DomCaptureWork = { nodes: 0, visited: 0, nameWork: 0, characters: 0, milliseconds: 0 };
     const outcome = captureDomPage(doc, limits, {
+      ...(command.controls?.actions ? { onNode(element: Element, node: SemanticNode) {
+        rememberAction ??= createDomActionRegistry(doc);
+        rememberAction(command.controls!.actions!, element, node);
+      } } : {}),
       ...(selected ? { root: selected } : {}),
       dataControls: command.controls?.data,
       embedded: frameId(doc.defaultView) !== 0,

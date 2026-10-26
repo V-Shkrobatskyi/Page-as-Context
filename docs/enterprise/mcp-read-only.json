@@ -1,0 +1,13 @@
+{
+  "PolicyVersion": 1,
+  "McpAllowed": true,
+  "McpAllowedModes": ["read-only"],
+  "McpDefaultMode": "read-only",
+  "McpMaxSessionMinutes": 15,
+  "McpMaxResponseKiB": 1024,
+  "McpWriteApproval": "each-action",
+  "RedactionMode": "force-on",
+  "IncludeFormValues": false,
+  "PageUrlMode": "without-query",
+  "LinkUrlMode": "without-query"
+}

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Vitalii Shkrobatskyi
 // SPDX-License-Identifier: GPL-3.0-only
 export interface SourceRules { AllowedCaptureSources?: string[]; BlockedCaptureSources?: string[] }
-export interface CaptureSourceRules extends SourceRules { personal?: SourceRules }
+export interface CaptureSourceRules extends SourceRules { personal?: SourceRules; additional?: SourceRules }
 export interface PersonalSourceSettings { allowlistEnabled: boolean; allowed: string[]; blocked: string[] }
 export const defaultSourceSettings = (): PersonalSourceSettings => ({ allowlistEnabled: false, allowed: [], blocked: [] });
 export function validateSourceSettings(raw: unknown): PersonalSourceSettings {
@@ -35,7 +35,8 @@ export function validateSourcePatterns(raw: unknown): string[] {
   }))].sort();
 }
 export function sourceAllowed(raw: string | undefined, rules: CaptureSourceRules = {}, actualOrigin?: string): boolean {
-  return matchesSourceRules(raw, rules, actualOrigin) && (!rules.personal || matchesSourceRules(raw, rules.personal, actualOrigin));
+  return matchesSourceRules(raw, rules, actualOrigin) && (!rules.personal || matchesSourceRules(raw, rules.personal, actualOrigin)) &&
+    (!rules.additional || matchesSourceRules(raw, rules.additional, actualOrigin));
 }
 function matchesSourceRules(raw: string | undefined, rules: SourceRules, actualOrigin?: string): boolean {
   if (rules.AllowedCaptureSources === undefined && !rules.BlockedCaptureSources?.length) return true;

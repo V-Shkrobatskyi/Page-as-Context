@@ -227,3 +227,27 @@ Example, in the usual browser-specific wrapper:
   "TechnicalLogClearAllowed": false
 }
 ```
+
+## MCP access (separate external channel)
+
+[MCP setup and migration](mcp-integration.md) describes the local helper.
+`McpAllowed=false` disables the feature. `McpAllowedModes:["read-only"]` excludes
+all writes. Allowing read-write never automatically grants interaction:
+users must explicitly connect a tab with write access. `McpAllowedActions` limits
+the four native-control operations. Without `McpWriteApproval`, users can choose
+per-action or bounded connection approval; the user default is per-action.
+Set `McpWriteApproval="each-action"` to require approval for every action;
+`session` permits a user's bounded connection approval without forcing it. Stop/Revoke stay available
+when settings are locked. Grant TTL defaults to 30 minutes (maximum policy
+range 1–480); sanitized tool responses default to 4096 KiB (range 64–16384,
+also bounded by transport). `McpAllowedClientIds` contains provisioned credential
+IDs, not self-declared client names. Empty client/source/mode/action allowlists
+deny their respective capability. Additional MCP source rules intersect global
+and personal rules; they never expand access.
+
+Clipboard/File export permissions do not control MCP. Use `McpAllowed` for that
+channel. `PreviewAllowed` and `McpTestAllowed` control local output tests;
+mandatory filters, exclusions, format/compression restrictions, preference save
+policy and source rules remain effective in every channel. An incompatible
+forced Maximum with write addressing fails closed. Policy/settings changes
+invalidate refs and unsent results. See [the read-only preset](enterprise/mcp-read-only.json).

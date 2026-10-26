@@ -438,6 +438,12 @@ get('close-filters').addEventListener('click', () => {
     try {
       const tab = await browser.tabs.getCurrent();
       if (tab?.id === undefined) throw new Error('tab-unavailable');
+      const route = new URLSearchParams(location.hash.slice(1));
+      if (route.get('return') === 'mcp') {
+        const source = route.get('source');
+        await browser.tabs.update(tab.id, { url: browser.runtime.getURL('/mcp.html') + (source && /^[a-zA-Z0-9_-]{16,80}$/u.test(source) ? '#' + source : '') });
+        return;
+      }
       await browser.tabs.remove(tab.id);
     } catch {
       leaving = false; updateControls();

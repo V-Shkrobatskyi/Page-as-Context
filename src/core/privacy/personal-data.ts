@@ -3,7 +3,8 @@
 import { maskPhone } from './masking';
 import { isEmailType } from './emails';
 
-export const PERSONAL_FIELD_TERMS = 'full name / first name / last name / email / phone / telephone / mobile / address / date of birth / dob / passport / ssn / social security / tax id / national id / driver license / card number / cvv / cvc / iban / bank account / routing number';
+export { PERSONAL_FIELD_TERMS } from './personal-field-terms';
+import { PERSONAL_FIELD_TERMS } from './personal-field-terms';
 export const PERSONAL_DATA_TYPES = ['phoneNumbers', 'paymentCards', 'iban'] as const;
 export type PersonalDataType = (typeof PERSONAL_DATA_TYPES)[number];
 export function isAutomaticType(type: unknown): boolean {

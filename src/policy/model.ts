@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import type { HistoryPolicy } from '../history/model';
+import { validateMcpPolicy, type McpPolicy } from '../mcp/policy';
 import { PAGE_URL_MODES, LINK_URL_MODES, DEFAULT_DATA_CONTROLS, type DataControls } from '../core/data-controls';
 import { validateSourcePatterns, type SourceRules } from './sources';
 import { COMPRESSION_LEVELS, DEFAULT_COMPRESSION_LEVEL, type CompressionLevel } from '../core/contracts';
@@ -14,7 +15,7 @@ export interface ExportPreferences {
   compression: CompressionLevel;
   redactSensitiveData: boolean;
 }
-export interface EnterprisePolicy extends SourceRules, HistoryPolicy {
+export interface EnterprisePolicy extends SourceRules, HistoryPolicy, McpPolicy {
   IncludePageTitle?: boolean;
   PageUrlMode?: DataControls['pageUrl'];
   LinkUrlMode?: DataControls['linkUrls'];
@@ -53,6 +54,7 @@ export function validatePolicy(raw: unknown): EnterprisePolicy {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) invalid('configuration');
   const source = raw as Record<string, unknown>;
   const result: EnterprisePolicy = {};
+  Object.assign(result, validateMcpPolicy(source, invalid));
   if (source.PolicyVersion !== undefined) {
     if (source.PolicyVersion !== 1) invalid('PolicyVersion');
     result.PolicyVersion = 1;
@@ -136,8 +138,14 @@ export function resolvePreferences(policy: EnterprisePolicy, personal: Partial<E
     redactSensitiveData: mode === 'force-on' || mode === 'user-controlled' && (personal.redactSensitiveData ?? true),
   };
 }
-export type PolicyAction = 'capture' | 'copy' | 'save' | 'preview' | 'picker' | 'customize' | 'diagnostics-copy' | 'diagnostics-save';
+export type PolicyAction = 'capture' | 'copy' | 'save' | 'preview' | 'picker' | 'customize' | 'diagnostics-copy' | 'diagnostics-save' | 'mcp-read' | 'mcp-write' | 'mcp-test';
 export function assertAction(policy: EnterprisePolicy, action: PolicyAction): void {
+  if (action === 'mcp-read' || action === 'mcp-write' || action === 'mcp-test') {
+    if (policy.McpAllowed === false || policy.McpAllowedModes?.length === 0 || !formats(policy).length || !levels(policy).length ||
+      action === 'mcp-write' && !(policy.McpAllowedModes ?? ['read-only', 'read-write']).includes('read-write') ||
+      action === 'mcp-test' && (policy.McpTestAllowed === false || policy.PreviewAllowed === false)) throw new PolicyError('MCP access is disabled by your administrator.');
+    return;
+  }
   if (action === 'diagnostics-copy' || action === 'diagnostics-save') {
     if (action === 'diagnostics-copy' && policy.ClipboardExportAllowed === false || action === 'diagnostics-save' && policy.FileExportAllowed === false) throw new PolicyError('Diagnostic export is disabled by your administrator.');
     return;

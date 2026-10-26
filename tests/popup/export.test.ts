@@ -312,7 +312,7 @@ describe('popup export flow', () => {
     expect(popup.storageSet).not.toHaveBeenCalled();
     expect(popup.clipboardWrite).not.toHaveBeenCalled();
     expect(popup.app.innerHTML).toContain('Filters');
-    expect(popup.app.innerHTML).toContain('Preview &amp; edit');
+    expect(popup.app.innerHTML).toContain('aria-label="Preview and edit context"');
   });
 
   it('waits until the settings tab opens before dismissing the Android popup', async () => {

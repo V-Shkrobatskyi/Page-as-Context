@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Vitalii Shkrobatskyi
 // SPDX-License-Identifier: GPL-3.0-only
 
+import type { ExportPresentation } from '../contracts';
 import { renderExportAttribution } from './attribution';
 import type { NodeStates, SemanticNode, SemanticTree, SerializedContext } from '..';
 import { measureMarkdownEncoding, renderMarkdownHeader, serializeMarkdown } from './markdown';
@@ -37,11 +38,13 @@ interface Analysis {
 interface Measure { characters: number; cost: number }
 
 /** Encodes only the already-redacted Compact export projection, preserving every occurrence. */
-export function serializeMaximum(tree: SemanticTree, format: Format, attribution = renderExportAttribution()): SerializedContext {
-  const fallback = () => format === 'semantic-text' ? serializeSemanticText(tree, attribution) : serializeMarkdown(tree, attribution);
+export function serializeMaximum(tree: SemanticTree, format: Format, attribution = renderExportAttribution(), presentation: ExportPresentation = {}): SerializedContext {
+  const fallback = () => format === 'semantic-text' ? serializeSemanticText(tree, attribution, presentation) : serializeMarkdown(tree, attribution, presentation);
+  const pending = [tree.root];
+  while (pending.length) { const node = pending.pop()!; if (node.actionRef) return fallback(); pending.push(...node.children); }
   const analysis = analyze(tree.root);
   if (!analysis) return fallback();
-  const baseline = format === 'semantic-text' ? measureSemanticTextEncoding(tree, attribution) : measureMarkdownEncoding(tree, attribution);
+  const baseline = format === 'semantic-text' ? measureSemanticTextEncoding(tree, attribution, presentation) : measureMarkdownEncoding(tree, attribution, presentation);
   let best: { options: Options; dictionary: Dictionary; measure: Measure; templates: Map<number, Template> } | undefined;
   // Eight bounded alternatives account for structural overlap and shared legends globally.
   for (let variant = 0; variant < 8; variant++) {
@@ -52,7 +55,7 @@ export function serializeMaximum(tree: SemanticTree, format: Format, attribution
     const templates = options.trees ? selectTemplates(tree.root, analysis) : new Map<number, Template>();
     if (options.trees && templates.size === 0) continue;
     const dictionary = selectDictionary(tree.root, analysis, options, templates, format);
-    const measure = render(tree, analysis, options, dictionary, templates, format, attribution);
+    const measure = render(tree, analysis, options, dictionary, templates, format, attribution, presentation);
     // This whole-payload margin is an uncertainty guard, not a token guarantee.
     if (baseline.characters - measure.characters < Math.max(64, baseline.characters * .02)
       || baseline.cost - measure.cost < Math.max(24, baseline.cost * .04)) continue;
@@ -60,7 +63,7 @@ export function serializeMaximum(tree: SemanticTree, format: Format, attribution
   }
   if (!best) return fallback();
   const lines: string[] = [];
-  render(tree, analysis, best.options, best.dictionary, best.templates, format, attribution, lines);
+  render(tree, analysis, best.options, best.dictionary, best.templates, format, attribution, presentation, lines);
   const content = `${lines.join('\n')}\n`;
   return { format, content, characterCount: content.length };
 }
@@ -281,7 +284,7 @@ function fields(node: SemanticNode, dictionary: Dictionary): string {
 }
 
 function render(tree: SemanticTree, analysis: Analysis, options: Options, dictionary: Dictionary,
-  templates: Map<number, Template>, format: Format, attribution: string, lines?: string[]): Measure {
+  templates: Map<number, Template>, format: Format, attribution: string, presentation: ExportPresentation, lines?: string[]): Measure {
   const measure = { characters: 0, cost: 0 };
   const counter = createEncodingCounter();
   const emit = (line: string): void => {
@@ -290,8 +293,8 @@ function render(tree: SemanticTree, analysis: Analysis, options: Options, dictio
     counter.add(line);
   };
   const header: string[] = [];
-  if (format === 'semantic-text') renderSemanticTextHeader(tree, header, attribution);
-  else renderMarkdownHeader(tree, header, attribution);
+  if (format === 'semantic-text') renderSemanticTextHeader(tree, header, attribution, presentation);
+  else renderMarkdownHeader(tree, header, attribution, presentation);
   for (const line of header) emit(line);
   emit(LEGEND);
   if (dictionary.roles.size) emit(escape(`Roles: ${[...dictionary.roles].map(([role, alias]) => `${alias}=${role}`).join('; ')}`, format));

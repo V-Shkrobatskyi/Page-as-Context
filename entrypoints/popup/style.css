@@ -61,13 +61,16 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
 body:not([data-platform="android"]) .format-option { min-height: 28px; padding-top: 4px; padding-bottom: 4px; }
 body:not([data-platform="android"]) .save-settings { min-height: 28px; padding-top: 5px; padding-bottom: 5px; }
 .action-section { margin-bottom: 14px; }
-.actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.actions { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.actions > button { grid-column: span 2; }
+.actions > .primary-action, .actions > .secondary-action { grid-column: span 3; }
 button { border-radius: 8px; cursor: pointer; padding: 9px 8px; font: inherit; font-size: .76rem; font-weight: 700; }
 .button-icon { width: 16px; height: 16px; flex: none; }
 .actions button, .customize-action, .save-settings { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .actions button[hidden], .save-settings[hidden] { display: none; }
 .save-settings:disabled { cursor: default; }
 .actions button { min-width: 0; padding: 9px 6px; font-size: .7rem; }
+.actions > .preview-action { padding-inline: 4px; gap: 4px; white-space: nowrap; }
 .primary-action { border: 1px solid var(--accent); background: var(--accent); color: #fff; box-shadow: 0 1px 2px #263e8929; }
 .secondary-action, .preview-action { border: 1px solid var(--border); background: var(--surface); color: var(--accent-dark); }
 button:disabled, input:disabled { cursor: wait; opacity: .65; }

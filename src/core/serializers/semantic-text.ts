@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Vitalii Shkrobatskyi
 // SPDX-License-Identifier: GPL-3.0-only
 
+import type { ExportPresentation } from '../contracts';
+import { renderAgentHeader } from './agent-header';
 import { renderExportAttribution } from './attribution';
 import { createEncodingCounter } from './maximum-cost';
 import type { NodeStates, SemanticNode, SemanticTree, SerializedContext } from '..';
@@ -19,34 +21,35 @@ const STATE_ORDER: readonly (keyof NodeStates)[] = [
 const SAFE_ROLE = /^\p{L}[\p{L}\p{N}_-]*$/u;
 
 /** Serializes an already-transformed semantic tree without changing its structure. */
-export function serializeSemanticText(tree: SemanticTree, attribution = renderExportAttribution()): SerializedContext {
+export function serializeSemanticText(tree: SemanticTree, attribution = renderExportAttribution(), options: ExportPresentation = {}): SerializedContext {
   const lines: string[] = [];
-  render(tree, lines, undefined, attribution);
+  render(tree, lines, undefined, attribution, options);
   const content = `${lines.join('\n')}\n`;
   return { format: 'semantic-text', content, characterCount: content.length };
 }
 
 /** Counts characters and estimates cost together without retaining tree lines. */
-export function measureSemanticTextEncoding(tree: SemanticTree, attribution = renderExportAttribution()): { characters: number; cost: number } {
+export function measureSemanticTextEncoding(tree: SemanticTree, attribution = renderExportAttribution(), options: ExportPresentation = {}): { characters: number; cost: number } {
   const counter = createEncodingCounter();
-  const characters = render(tree, undefined, counter.add, attribution);
+  const characters = render(tree, undefined, counter.add, attribution, options);
   return { characters, cost: counter.total() };
 }
 
 /** Measures the exact same output without accumulating tree lines or a full string. */
-export function countSemanticTextCharacters(tree: SemanticTree, attribution = renderExportAttribution()): number {
-  return render(tree, undefined, undefined, attribution);
+export function countSemanticTextCharacters(tree: SemanticTree, attribution = renderExportAttribution(), options: ExportPresentation = {}): number {
+  return render(tree, undefined, undefined, attribution, options);
 }
 
-function render(tree: SemanticTree, lines?: string[], measure?: (line: string) => void, attribution = renderExportAttribution()): number {
+function render(tree: SemanticTree, lines?: string[], measure?: (line: string) => void, attribution = renderExportAttribution(), options: ExportPresentation = {}): number {
   const headers = lines ?? [];
-  renderSemanticTextHeader(tree, headers, attribution);
+  renderSemanticTextHeader(tree, headers, attribution, options);
   for (const line of headers) measure?.(line);
   const headerCount = headers.reduce((count, line) => count + line.length + 1, 0);
   return headerCount + renderNode(tree.root, 0, lines, measure);
 }
 
-export function renderSemanticTextHeader(tree: SemanticTree, lines: string[], attribution = renderExportAttribution()): void {
+export function renderSemanticTextHeader(tree: SemanticTree, lines: string[], attribution = renderExportAttribution(), options: ExportPresentation = {}): void {
+  if (renderAgentHeader(tree, lines, options)) return;
   if (tree.sourceUrl === undefined && tree.capturedAt === undefined) return;
 
   lines.push(`Page: ${headerValue(tree.title, 'Untitled page')}`);
@@ -82,6 +85,7 @@ function renderRole(role: string): string {
 
 function renderAttributes(node: SemanticNode): string[] {
   const attributes: string[] = [];
+  if (node.actionRef !== undefined) attributes.push(`ref=${quote(node.actionRef)}`);
 
   if (node.value !== undefined) attributes.push(`value=${quote(node.value)}`);
   for (const state of STATE_ORDER) {

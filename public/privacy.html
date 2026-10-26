@@ -20,6 +20,7 @@ SPDX-License-Identifier: GPL-3.0-only
       <div class="site-nav-primary">
         <a href="filters.html">Filters</a>
         <a href="data-controls.html">Data controls</a>
+        <a href="mcp.html">MCP</a>
         <a href="guide.html">Guide</a>
       </div>
       <div class="site-nav-secondary"><a href="privacy.html" aria-current="page">Privacy</a> <a href="license.html">License</a> <a href="https://github.com/V-Shkrobatskyi/Copy-as-Context" target="_blank" rel="noopener noreferrer">GitHub ↗</a></div>
@@ -91,7 +92,7 @@ SPDX-License-Identifier: GPL-3.0-only
     </nav>
     <main class="page-main prose">
       <h1>Privacy policy for Page as Context</h1>
-      <p>Last updated: 2026-10-23. Applies to version 1.6.0.</p>
+      <p>Last updated: 2026-10-26. Applies to version 2.0.0.</p>
 
       <section aria-labelledby="processing">
         <h2 id="processing">Information and local processing</h2>
@@ -127,6 +128,8 @@ SPDX-License-Identifier: GPL-3.0-only
 
       <section aria-labelledby="sharing">
         <h2 id="sharing">Sharing and external services</h2>
+        <p><strong>Optional MCP:</strong> disabled by default. Explicit pairing and a tab grant let an external client request filtered context through a separately installed local helper. That client may send it to a model provider. Read and write requires additional browser consent; actions can submit data or cause irreversible changes. Each action asks for browser approval by default. Stop/revoke clears live access but cannot recall delivered data. Restarts never restore live grants.</p>
+        <p>Pairing stores credential hashes locally; the helper stores credentials in protected local files. Page payloads and transient refs are not persisted in preferences or diagnostics. Entered values are not saved in approval history. Firefox separately requests optional website-content, browsing-activity and personal-communication transmission consent, plus website-activity consent for write mode. Declining keeps ordinary export available.</p>
         <p>The extension does not upload captured content, URLs, preferences, history or journal entries automatically, send them to the developer, sell data or use it for advertising. If you paste/upload an export elsewhere, that service’s policies apply.</p>
         <p>Help, project, contact and donation links open only when chosen, without capture data attached. Linked services, email and payment providers may receive normal navigation, contact or payment information under their policies.</p>
         <p>Support emails and GitHub issues contain information you provide and may be retained by recipients. Omit passwords, tokens and private page content. Contact the developer to request deletion of information sent directly; public GitHub content also follows GitHub’s controls and policies.</p>
@@ -135,11 +138,12 @@ SPDX-License-Identifier: GPL-3.0-only
       <section aria-labelledby="permissions">
         <h2 id="permissions">Permissions</h2>
         <ul>
-          <li><strong>Chrome debugger:</strong> temporarily reads the active page and eligible frames after an export request, checks frame visibility/password input types, then detaches.</li>
-          <li><strong>activeTab and scripting:</strong> provide temporary page access and the on-demand Desktop element picker. Firefox also uses them for page/frame capture.</li>
-          <li><strong>Firefox optional site access:</strong> Include frames from other sites is off by default. Enabling requests access to all HTTP/HTTPS sites. Access persists across tabs/restarts; switching off revokes it, including earlier individual grants. Capture still requires Copy, Preview or Desktop Save, including selected-block actions. Protected frames may remain unavailable.</li>
+          <li><strong>Chrome debugger:</strong> temporarily reads the active page and eligible frames after an export or authorized MCP request, checks frame visibility/password input types, and performs explicitly approved MCP interactions before detaching.</li>
+          <li><strong>activeTab and scripting:</strong> provide temporary page access and the on-demand Desktop element picker. Firefox also uses them for page/frame capture and approved MCP interactions through fixed isolated-world operations.</li>
+          <li><strong>Firefox optional site access:</strong> Include frames from other sites is off by default. Enabling requests access to all HTTP/HTTPS sites. Access persists across tabs/restarts; switching off revokes it, including earlier individual grants. Ordinary capture requires Copy, Preview or Desktop Save; MCP capture requires a separately authorized connection. Protected frames may remain unavailable.</li>
           <li><strong>clipboardWrite:</strong> copies your requested export.</li>
           <li><strong>downloads:</strong> saves requested files on Desktop. Firefox asks for this optional permission on Save; Android never requests it.</li>
+          <li><strong>nativeMessaging (optional):</strong> connects to the local helper only after MCP enablement and permission consent.</li>
           <li><strong>storage:</strong> saves preferences and filter settings locally.</li>
         </ul>
       </section>

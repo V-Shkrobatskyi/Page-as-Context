@@ -1,0 +1,139 @@
+// @vitest-environment jsdom
+// Copyright (c) 2026 Vitalii Shkrobatskyi; SPDX-License-Identifier: GPL-3.0-only
+import { readFileSync } from 'node:fs';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
+const fixture = vi.hoisted(() => ({ send: vi.fn(), updated: new Set<() => void>(), removed: new Set<() => void>(), messages: new Set<(message: any, sender: any) => void>() }));
+vi.mock('wxt/browser', () => ({ browser: {
+  runtime: { id: 'synthetic-extension', sendMessage: fixture.send, onMessage: { addListener: (fn: any) => fixture.messages.add(fn), removeListener: (fn: any) => fixture.messages.delete(fn) } },
+  storage: { onChanged: { addListener: vi.fn(), removeListener: vi.fn() } },
+  tabs: {
+    onUpdated: { addListener: (fn: () => void) => fixture.updated.add(fn), removeListener: (fn: () => void) => fixture.updated.delete(fn) },
+    onRemoved: { addListener: (fn: () => void) => fixture.removed.add(fn), removeListener: (fn: () => void) => fixture.removed.delete(fn) },
+  },
+} }));
+function state(enabled: boolean) {
+  return { ok: true, revision: String(enabled), locked: false, testAllowed: true, copyAllowed: true, saveAllowed: true,
+    settings: { enabled, mode: 'read-only', inherit: true }, allowedModes: ['read-only', 'read-write'], sessionApprovalAllowed: false,
+    locks: {}, allowedFormats: ['semantic-text'], allowedCompression: ['compact'], requiredBuiltinFilters: [], managedRuleCount: 0,
+    transport: 'disconnected', browser: 'chrome', instanceId: 'synthetic-instance',
+    preferences: { format: 'semantic-text', compression: 'compact', redactSensitiveData: true }, pending: [], clients: [], connections: [],
+  };
+}
+beforeEach(() => {
+  fixture.send.mockReset(); fixture.updated.clear(); fixture.removed.clear(); fixture.messages.clear();
+  location.hash = '11111111-1111-4111-8111-111111111111';
+  document.body.innerHTML = readFileSync('entrypoints/mcp/index.html', 'utf8').split(/<body\b[^>]*>/u)[1]!.split('</body>')[0]!;
+});
+afterEach(() => { window.dispatchEvent(new Event('pagehide')); vi.useRealTimers(); vi.resetModules(); });
+
+it.each(['updated', 'removed'] as const)('finishes initial status loading after a tab %s event invalidates its pending read', async event => {
+  let resolveInitial!: (value: unknown) => void;
+  fixture.send.mockImplementationOnce(() => new Promise(resolve => { resolveInitial = resolve; })).mockResolvedValue(state(true));
+  await import('@/entrypoints/mcp/main');
+  expect(document.getElementById('status')!.textContent).toBe('Loading…');
+  for (const listener of fixture[event]) listener();
+  resolveInitial(state(false));
+  await vi.waitFor(() => expect(document.getElementById('status')!.textContent).toContain('MCP is enabled.'));
+  expect(fixture.send).toHaveBeenCalledTimes(2);
+  expect((document.getElementById('enabled') as HTMLInputElement).checked).toBe(true);
+  expect(document.getElementById('transport')!.textContent).toBe('Helper: disconnected');
+});
+
+it.each([
+  ['source-required', 'The selected tab is missing or expired.'],
+  ['page-changed', 'The selected page changed.'],
+  ['not-connected', 'This client has no active helper connection.'],
+  ['permission-required', 'Browser permission is required.'],
+  ['unknown-private-error', 'MCP request unavailable.'],
+])('shows actionable safe feedback when Connect fails with %s', async (code, expected) => {
+  const initial = { ...state(true), clients: [{ id: 'synthetic-client' }] };
+  fixture.send.mockImplementation(async request => request.action === 'read' ? initial : { ok: false, code, error: 'Private internal detail' });
+  await import('@/entrypoints/mcp/main');
+  await vi.waitFor(() => expect(document.querySelector('#clients button')).not.toBeNull());
+  (document.querySelector('#clients button') as HTMLButtonElement).click();
+  await vi.waitFor(() => expect(document.getElementById('status')!.textContent).toContain(expected));
+  expect(document.getElementById('status')!.textContent).not.toContain('Private internal detail');
+  expect(document.getElementById('connections')!.textContent).toBe('');
+});
+
+
+it.each(['ready', 'disconnected'])('refreshes a connecting helper automatically until it becomes %s', async transport => {
+  vi.useFakeTimers();
+  fixture.send.mockResolvedValueOnce({ ...state(true), transport: 'connecting' }).mockResolvedValue({ ...state(true), transport });
+  await import('@/entrypoints/mcp/main');
+  expect(document.getElementById('transport')!.textContent).toBe('Helper: connecting');
+  await vi.advanceTimersByTimeAsync(500);
+  expect(document.getElementById('transport')!.textContent).toBe(`Helper: ${transport}`);
+  const requests = fixture.send.mock.calls.length;
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(fixture.send).toHaveBeenCalledTimes(requests);
+});
+
+it('cancels automatic connection refresh when the settings page closes', async () => {
+  vi.useFakeTimers();
+  fixture.send.mockResolvedValue({ ...state(true), transport: 'connecting' });
+  await import('@/entrypoints/mcp/main');
+  expect(document.getElementById('transport')!.textContent).toBe('Helper: connecting');
+  window.dispatchEvent(new Event('pagehide'));
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(fixture.send).toHaveBeenCalledTimes(1);
+});
+
+it.each([true, false])('renders connection approval availability from policy: %s', async allowed => {
+  const initial = { ...state(true), sessionApprovalAllowed: allowed, settings: { ...state(true).settings, writeApproval: 'session' } };
+  fixture.send.mockResolvedValue(initial);
+  await import('@/entrypoints/mcp/main');
+  const select = document.getElementById('write-approval') as HTMLSelectElement;
+  await vi.waitFor(() => expect(document.getElementById('transport')!.textContent).toBe('Helper: disconnected'));
+  expect(select.options[1]!.textContent).toBe('Allow for this connection');
+  expect(select.options[1]!.disabled).toBe(!allowed);
+  expect(select.value).toBe(allowed ? 'session' : 'each-action');
+});
+
+it('shows client names, codes and separate selected and connected tab titles as plain text', async () => {
+  const initial = { ...state(true), selectedTab: { title: 'Selected <img> tab' },
+    pending: [{ id: 'pending_client_001', code: 'ABCD1234', name: 'New <b>client</b>' }],
+    clients: [{ id: 'approved_client_001', name: 'ChatGPT — Firefox' }],
+    connections: [{ id: 'connection_001', clientId: 'approved_client_001', mode: 'read-only', expires: Date.now() + 10000, tabTitle: 'Connected tab title' }],
+  };
+  fixture.send.mockResolvedValue(initial);
+  await import('@/entrypoints/mcp/main');
+  await vi.waitFor(() => expect(document.getElementById('pairing')!.textContent).toContain('ABCD1234'));
+  expect(document.getElementById('pairing')!.textContent).toContain('New <b>client</b>');
+  expect(document.getElementById('pairing')!.textContent).toContain('Selected tab (not connected): Selected <img> tab');
+  expect(document.getElementById('clients')!.textContent).toContain('ChatGPT — Firefox');
+  expect(document.getElementById('clients')!.textContent).toContain('Connected tab: Connected tab title');
+  expect(document.querySelector('#pairing b, #pairing img')).toBeNull();
+});
+
+
+it('shows a new pairing request from a background notification without Refresh or losing draft settings', async () => {
+  let current: any = state(true);
+  fixture.send.mockImplementation(async () => current);
+  await import('@/entrypoints/mcp/main');
+  await vi.waitFor(() => expect(document.getElementById('transport')!.textContent).toBe('Helper: disconnected'));
+  const mode = document.getElementById('mode') as HTMLSelectElement;
+  mode.value = 'read-write'; mode.dispatchEvent(new Event('input', { bubbles: true }));
+  current = { ...state(true), transport: 'ready', pending: [{ id: 'new_pending_client', code: 'ABCD1234', name: 'ChatGPT — Firefox' }] };
+  for (const listener of fixture.messages) listener({ type: 'mcp-state-changed-v1' }, { id: 'synthetic-extension' });
+  await vi.waitFor(() => expect(document.getElementById('pairing')!.textContent).toContain('ABCD1234'));
+  expect(document.getElementById('transport')!.textContent).toBe('Helper: ready');
+  expect(mode.value).toBe('read-write');
+  expect(document.getElementById('draft-state')!.textContent).toContain('Draft');
+  expect(fixture.send.mock.calls.every(([message]) => message.action === 'read')).toBe(true);
+  window.dispatchEvent(new Event('pagehide'));
+  expect(fixture.messages.size).toBe(0);
+});
+
+it('ignores state-change notifications from content scripts and other extensions', async () => {
+  fixture.send.mockResolvedValue(state(true));
+  await import('@/entrypoints/mcp/main');
+  await vi.waitFor(() => expect(document.getElementById('transport')!.textContent).toBe('Helper: disconnected'));
+  const before = fixture.send.mock.calls.length;
+  for (const listener of fixture.messages) {
+    listener({ type: 'mcp-state-changed-v1' }, { id: 'other-extension' });
+    listener({ type: 'mcp-state-changed-v1' }, { id: 'synthetic-extension', tab: { id: 7 } });
+  }
+  expect(fixture.send).toHaveBeenCalledTimes(before);
+});

@@ -18,6 +18,7 @@ export function labelIsCovered(label: string | undefined, ancestorLabels: readon
 }
 
 export function hasSemanticAttributes(node: SemanticNode): boolean {
+  if (node.actionRef) return true;
   return (
     node.name !== undefined ||
     node.value !== undefined ||

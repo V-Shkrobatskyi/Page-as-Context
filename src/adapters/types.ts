@@ -8,6 +8,7 @@ export type CaptureOutcome = { ok: true; tree: SemanticTree; warnings?: CaptureW
   { ok: false; error: CaptureError };
 
 export interface CaptureControls {
+  actions?: { owner: string; snapshotId: string; expires: number };
   sources?: import('../policy/sources').CaptureSourceRules;
   data?: import('../core/data-controls').DataControls;
 }
