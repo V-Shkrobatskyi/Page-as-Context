@@ -1,0 +1,17 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "page-as-context-package-spike",
+  "version": "0.2.1",
+  "description": "Content-free installation check for Page as Context. No page reading or browser actions.",
+  "author": { "name": "Vitalii Shkrobatskyi" },
+  "license": "GPL-3.0-only",
+  "extensions": {
+    "com.openai": {
+      "requires_local_executor": true,
+      "interface": {
+        "displayName": "Page as Context — Installation check",
+        "shortDescription": "Check the local package before enabling browser integration."
+      }
+    }
+  }
+}
