@@ -19,6 +19,7 @@ type Receipt = ActionOutcome & { operationId: string; snapshotId?: string; snaps
 export class OperationLedger {
   private entries = new Map<string, { hash: string; receipt: Promise<Receipt> }>();
   clear() { this.entries.clear(); }
+  clearGrant(grant: string) { for (const key of this.entries.keys()) if (key.startsWith(grant + ':')) this.entries.delete(key); }
   async execute<T extends Receipt>(grant: string, args: ActionCommand & { operationId: string }, perform: () => Promise<T>): Promise<T | Receipt> {
     const encoded = new TextEncoder().encode(JSON.stringify(Object.fromEntries(Object.entries(args).sort(([a], [b]) => a.localeCompare(b)))));
     const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', encoded)), byte => byte.toString(16).padStart(2, '0')).join('');

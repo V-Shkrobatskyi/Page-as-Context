@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page as Context desktop acceptance</title>
+<style>
+  body { max-width: 800px; margin: 32px auto; padding: 0 20px; font: 18px/1.5 system-ui; color: #172235; background: #f5f7fb; }
+  section { margin: 20px 0; padding: 20px; background: white; border: 1px solid #cdd5e0; border-radius: 12px; }
+  label { display: block; margin: 12px 0; } input:not([type=checkbox]), textarea, select { display: block; padding: 8px; width: 90%; font: inherit; }
+  button { padding: 10px 18px; font: inherit; } output { white-space: pre-wrap; overflow-wrap: anywhere; } iframe { width: 100%; height: 160px; }
+</style>
+<h1>Desktop MCP acceptance fixture</h1>
+<p>Public test marker: <strong>PAC-DESKTOP-20261026</strong></p>
+<p>All values are synthetic. No form submits, external requests, or stored state. Reload resets every counter.</p>
+<section>
+  <h2>Supported native controls</h2>
+  <label>Test input <input id="input" autocomplete="off" value="initial input"></label>
+  <label>Test textarea <textarea id="textarea">initial textarea</textarea></label>
+  <label>Test choice <select id="choice"><option value="alpha">Alpha</option><option value="beta">Beta</option><option value="gamma">Gamma</option></select></label>
+  <label><input id="checkbox" type="checkbox"> Test checkbox</label>
+  <button id="increment" type="button">Increment local counter</button>
+  <p>Click count: <output id="clicks">0</output></p>
+  <h3>Observed native state and event counts</h3>
+  <output id="state" aria-live="polite"></output>
+</section>
+<section>
+  <h2>Unsupported and sensitive controls</h2>
+  <label>Disabled input <input disabled value="must remain unchanged"></label>
+  <label>Test password <input type="password" value="synthetic-password-only" autocomplete="off"></label>
+  <label>Test file <input type="file"></label>
+  <div contenteditable="true" role="textbox" aria-label="Unsupported custom editor">Custom editor negative case</div>
+  <p>Synthetic privacy marker: privacy.fixture@example.test</p>
+</section>
+<section><h2>Same-origin embedded document</h2><iframe src="/frame.html" title="Neutral embedded fixture"></iframe></section>
+<section><h2>Navigation</h2><a href="/next.html">Navigate to a different test document</a> · <a href="/">Reload and reset fixture</a></section>
+<script src="/fixture.js"></script>
+</html>

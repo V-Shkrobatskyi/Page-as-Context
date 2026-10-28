@@ -16,7 +16,12 @@ const validId = (value: unknown): value is string => typeof value === 'string' &
 const digest = async (text: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))), byte => byte.toString(16).padStart(2, '0')).join('');
 const validName = (value: unknown): value is string => typeof value === 'string' && value.trim() === value && value.length > 0 && value.length <= 80 && !/[\p{Cc}\p{Cf}]/u.test(value);
 interface Client { id: string; hash: string; name?: string }
-interface Grant { id: string; clientId: string; tabId: number; origin: string; expires: number; revision: string; write: boolean; sessionApproval: boolean; busy?: boolean }
+function validateClients(value: unknown): Client[] {
+  if (!Array.isArray(value) || value.length > 32 || value.some(client => !client || !validId(client.id) || typeof client.hash !== 'string' || !/^[a-f0-9]{64}$/u.test(client.hash) || client.name !== undefined && !validName(client.name)) ||
+    new Set(value.map(client => client.id)).size !== value.length) throw new Error('invalid-clients');
+  return value;
+}
+interface Grant { id: string; clientId: string; clientHash: string; tabId: number; origin: string; expires: number; revision: string; write: boolean; sessionApproval: boolean; busy?: boolean }
 interface Source { tabId: number; url: string; expires: number }
 interface NativeRequest { type: 'request'; id: string; instanceId: string; browser: string; credentialId: string; credentialSecret: string; request: { tool: string; arguments?: Record<string, unknown> } }
 
@@ -30,6 +35,7 @@ export function createMcpController() {
   const pendingClients = new Map<string, string>();
   const approvals = new Map<string, { grant: Grant; action: string; target: string; expires: number; tabId?: number; answer: (allow: boolean) => void }>();
   let generation = 0;
+  let clientRegistryRevision = 0;
   let pairingExpiry: ReturnType<typeof setTimeout> | undefined;
   const notifyUi = () => {
     // No code, credential, client identity or page metadata is broadcast.
@@ -46,6 +52,15 @@ export function createMcpController() {
   };
   const notifyTools = (clientId: string) => { try { port?.postMessage({ type: 'tools-changed', credentialId: clientId }); } catch { /* Disconnect invalidates live grants. */ } };
   const disposeSnapshot = (owner: string) => { snapshots.get(owner)?.dispose(); snapshots.delete(owner); };
+  const revokeClientAccess = (clientId: string) => {
+    clientRegistryRevision++;
+    for (const [id, grant] of grants) if (grant.clientId === clientId) {
+      grants.delete(id); disposeSnapshot(id); ledger.clearGrant(id);
+    }
+    for (const approval of [...approvals.values()]) if (approval.grant.clientId === clientId) approval.answer(false);
+    for (const [id, client] of pendingClients) if (client === clientId) pending.get(id)?.abort();
+    pairing.delete(clientId); schedulePairingExpiry(); notifyTools(clientId);
+  };
   const invalidate = () => { generation++; const clients = new Set([...grants.values()].map(grant => grant.clientId)); grants.clear(); for (const client of clients) notifyTools(client); for (const controller of pending.values()) controller.abort(); pending.clear();
     for (const snapshot of snapshots.values()) snapshot.dispose(); snapshots.clear();
     for (const approval of [...approvals.values()]) approval.answer(false); ledger.clear(); };
@@ -59,10 +74,8 @@ export function createMcpController() {
     return instance!;
   };
   const clients = async (): Promise<Client[]> => {
-    const stored = await browser.storage.local.get(CLIENTS_KEY); const value = stored[CLIENTS_KEY] ?? [];
-    if (!Array.isArray(value) || value.length > 32 || value.some(client => !client || !validId(client.id) || typeof client.hash !== 'string' || !/^[a-f0-9]{64}$/u.test(client.hash) || client.name !== undefined && !validName(client.name)) ||
-      new Set(value.map(client => client.id)).size !== value.length) throw new Error('invalid-clients');
-    return value;
+    const stored = await browser.storage.local.get(CLIENTS_KEY);
+    return validateClients(stored[CLIENTS_KEY] ?? []);
   };
   const nativeResult = (target: Browser.runtime.Port, id: string, value: unknown) => {
     const bytes = new TextEncoder().encode(JSON.stringify(value));
@@ -80,7 +93,7 @@ export function createMcpController() {
       effective.snapshot.policy.McpAllowedClientIds && !effective.snapshot.policy.McpAllowedClientIds.includes(request.credentialId)) throw new Error('not-connected');
     const client = (await clients()).find(client => client.id === request.credentialId);
     if (!client || client.hash !== await digest(request.credentialSecret)) throw new Error('not-connected');
-    return effective;
+    return { ...effective, clientHash: client.hash };
   };
   const requestApproval = (grant: Grant, action: string, target: string, signal: AbortSignal): Promise<boolean> => new Promise(resolve => {
     const id = crypto.randomUUID();
@@ -131,7 +144,7 @@ export function createMcpController() {
     if (!validId(args.connectionId) || !isWrite && Object.keys(args).some(key => key !== 'connectionId')) throw new Error('invalid-request');
     const grant = grants.get(args.connectionId);
     const authorize = () => {
-      if (ticket !== generation || controller.signal.aborted || !port || !grant || grants.get(grant.id) !== grant || grant.clientId !== request.credentialId ||
+      if (ticket !== generation || controller.signal.aborted || !port || !grant || grants.get(grant.id) !== grant || grant.clientId !== request.credentialId || grant.clientHash !== effective.clientHash ||
         grant.expires <= Date.now() || grant.revision !== effective.revision) throw new Error('not-connected');
     };
     authorize();
@@ -187,11 +200,14 @@ export function createMcpController() {
     try { const result = await capture(); technicalEvent({ code: 'mcp-read', result: 'success' }); return result; }
     finally { grant!.busy = false; busyTabs.delete(grant!.tabId); }
   };
-  const start = async () => {
-    if (port) return;
+  const start = async (ticket = generation) => {
+    if (port || ticket !== generation) return;
     const effective = await resolveMcpSettings(); assertAction(effective.snapshot.policy, 'mcp-read');
     if (!effective.settings.enabled || !effective.modeAllowed || !await hasMcpTransmissionConsent(effective.settings.mode === 'read-write') || !(await browser.permissions.contains({ permissions: ['nativeMessaging'] }))) throw new Error('permission-required');
     if ((await browser.runtime.getPlatformInfo()).os === 'android') throw new Error('unsupported-platform');
+    const instanceId = await identity();
+    // Stop, permission removal or a newer settings change cancels a pending start.
+    if (port || ticket !== generation) return;
     const current = browser.runtime.connectNative('org.page_as_context.bridge'); port = current; transport = 'connecting';
     notifyUi();
     current.onDisconnect.addListener(() => { void browser.runtime.lastError; if (port === current) { port = undefined; transport = 'disconnected'; invalidate(); pairing.clear(); schedulePairingExpiry(); notifyUi(); } });
@@ -224,7 +240,7 @@ export function createMcpController() {
         if (port === current && ticket === generation && !controller.signal.aborted) nativeResult(current, value.id, { error: error instanceof Error && allowed.includes(error.message) ? error.message : 'request-rejected' });
       }).catch(() => stop()).finally(() => { clearTimeout(timeout); pending.delete(value.id); pendingClients.delete(value.id); });
     });
-    current.postMessage({ type: 'register', protocol: 1, browser: import.meta.env.BROWSER, instanceId: await identity() });
+    current.postMessage({ type: 'register', protocol: 1, browser: import.meta.env.BROWSER, instanceId });
   };
   const clearTab = (tabId: number, removed = false) => {
     for (const approval of [...approvals.values()]) if (removed && approval.tabId === tabId || approval.grant.tabId === tabId) approval.answer(false);
@@ -238,9 +254,25 @@ export function createMcpController() {
   });
   browser.permissions?.onRemoved?.addListener(() => stop());
   browser.storage.onChanged?.addListener((changes, area) => {
-    if (area === 'managed' || area === 'local' && ['data-controls-v1', 'capture-sources-v1', 'popup-settings', 'redaction-filters-v1', MCP_SETTINGS_KEY, CLIENTS_KEY].some(key => key in changes)) {
+    if (area === 'local' && changes[CLIENTS_KEY]) {
+      clientRegistryRevision++;
+      try {
+        const previous = validateClients(changes[CLIENTS_KEY].oldValue ?? []);
+        const next = validateClients(changes[CLIENTS_KEY].newValue ?? []);
+        for (const client of previous) {
+          const current = next.find(value => value.id === client.id);
+          if (!current || current.hash !== client.hash || current.name !== client.name) revokeClientAccess(client.id);
+        }
+      } catch { stop(); }
+    }
+    if (area === 'managed' || area === 'local' && ['data-controls-v1', 'capture-sources-v1', 'popup-settings', 'redaction-filters-v1', MCP_SETTINGS_KEY].some(key => key in changes)) {
+      const reconnect = area === 'local' && !!changes[MCP_SETTINGS_KEY] && !!port;
       invalidate();
-      if (area === 'managed' || changes[MCP_SETTINGS_KEY]) { const previous = port; port = undefined; transport = 'disconnected'; previous?.disconnect(); }
+      if (area === 'managed' || changes[MCP_SETTINGS_KEY]) {
+        const previous = port; port = undefined; transport = 'disconnected'; previous?.disconnect(); notifyUi();
+        // One attempt only, with existing permissions. Never restore grants or replay actions.
+        if (reconnect) void start(generation).catch(() => notifyUi());
+      }
     }
   });
 
@@ -262,7 +294,8 @@ export function createMcpController() {
     }
     if (raw.action === 'stop') { stop(); return { ok: true }; }
     if (raw.action === 'revoke' && settingsPage && validId(raw.clientId)) {
-      stop(); await browser.storage.local.set({ [CLIENTS_KEY]: (await clients()).filter(client => client.id !== raw.clientId) }); return { ok: true };
+      await browser.storage.local.set({ [CLIENTS_KEY]: (await clients()).filter(client => client.id !== raw.clientId) });
+      revokeClientAccess(raw.clientId); notifyUi(); return { ok: true };
     }
     const effective = await resolveMcpSettings();
     assertAction(effective.snapshot.policy, 'mcp-read');
@@ -279,6 +312,7 @@ export function createMcpController() {
       const known = await clients();
       if (!known.some(client => client.id === raw.clientId)) throw new Error('invalid-clients');
       await browser.storage.local.set({ [CLIENTS_KEY]: known.map(client => client.id === raw.clientId ? { ...client, name: raw.name } : client) });
+      revokeClientAccess(raw.clientId);
       return { ok: true };
     }
     if (raw.action === 'read') {
@@ -321,12 +355,15 @@ export function createMcpController() {
     const tab = await browser.tabs.get(source.tabId);
     if (tab.url !== source.url || tab.incognito || tab.discarded) throw new Error('page-changed');
     if (raw.action === 'connect' && validId(raw.clientId)) {
-      if (!port || transport !== 'ready' || !effective.settings.enabled || !(await clients()).some(client => client.id === raw.clientId) ||
+      const clientRevision = clientRegistryRevision;
+      const client = (await clients()).find(client => client.id === raw.clientId);
+      if (!port || transport !== 'ready' || !effective.settings.enabled || !client ||
+        clientRevision !== clientRegistryRevision ||
         effective.snapshot.policy.McpAllowedClientIds && !effective.snapshot.policy.McpAllowedClientIds.includes(raw.clientId)) throw new Error('not-connected');
       for (const [id, grant] of grants) if (grant.clientId === raw.clientId) { grants.delete(id); disposeSnapshot(id); }
       const write = effective.settings.mode === 'read-write' && raw.allowWrite === true;
       if (write) assertAction(effective.snapshot.policy, 'mcp-write');
-      const id = crypto.randomUUID(); grants.set(id, { id, clientId: raw.clientId, tabId: source.tabId, origin: new URL(source.url).origin,
+      const id = crypto.randomUUID(); grants.set(id, { id, clientId: raw.clientId, clientHash: client.hash, tabId: source.tabId, origin: new URL(source.url).origin,
         expires: Date.now() + (effective.snapshot.policy.McpMaxSessionMinutes ?? 30) * 60000, revision: effective.revision, write,
         sessionApproval: write && effective.settings.writeApproval === 'session' && effective.sessionApprovalAllowed });
       notifyTools(raw.clientId);

@@ -1,0 +1,10 @@
+{
+  "name": "page-as-context-claude-build",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "description": "Pinned build-time tooling for the Page as Context Claude desktop extension.",
+  "devDependencies": { "@anthropic-ai/mcpb": "2.1.2" },
+  "engines": { "node": ">=24.10.0 <25" }
+}

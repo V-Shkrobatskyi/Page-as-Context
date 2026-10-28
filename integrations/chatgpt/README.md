@@ -1,9 +1,10 @@
 # ChatGPT desktop plugin
 
 The package contains Chrome/Firefox MCP servers, a pinned Node runtime, locked
-production dependencies and an explicit in-chat browser setup workflow. Only
-ChatGPT packaging is currently implemented; Claude is deferred until ChatGPT
-acceptance is complete. The shared setup service uses standard MCP tools and
+production dependencies and an explicit in-chat browser setup workflow.
+The ChatGPT package has actual-client browser checks; an experimental
+[Claude MCPB](../claude/README.md) is now available for separate acceptance.
+The shared setup service uses standard MCP tools and
 accepts client-specific profile paths and display names for future packages.
 
 See [the user guide](PACKAGE-README.md) for pairing and access management.
