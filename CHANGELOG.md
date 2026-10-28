@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.1 — unreleased
+
+- Show the applied access mode on the MCP tab connection button without a separate write checkbox.
+- Reconnect an active helper once after applying MCP settings, preserving permission checks and requiring new tab connections.
+- Keep the helper and other clients connected when revoking or renaming one client, and bind tab grants to its credentials.
+
 ## 2.0.0 — unreleased
 
 - Add optional local MCP integration for explicitly shared Chrome and Firefox tabs, with read-only and read/write modes, pairing, per-tab grants, action approvals, Stop and Revoke.
