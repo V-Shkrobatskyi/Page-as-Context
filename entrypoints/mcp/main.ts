@@ -40,7 +40,6 @@ function draft(): McpSettings {
 }
 function controls() {
   for (const id of ['enabled', 'mode', 'inherit', 'apply', 'apply-access', 'write-approval']) get<HTMLInputElement | HTMLButtonElement>(id).disabled = locked;
-  get<HTMLInputElement>('allow-write').disabled = get<HTMLSelectElement>('mode').value !== 'read-write';
   for (const id of ['format', 'compression', 'redact']) get<HTMLInputElement>(id).disabled = locked || get<HTMLInputElement>('inherit').checked;
   if (fieldLocks.format) get<HTMLSelectElement>('format').disabled = true;
   if (fieldLocks.compression) get<HTMLSelectElement>('compression').disabled = true;
@@ -93,10 +92,16 @@ async function load() {
     const approve = button('Approve pairing', async () => { await request('approve', { clientId: value.id, code: value.code }); await load(); }); approve.disabled = locked; actions.append(approve); return row;
   }));
   if (!result.pending.length) get('pairing').append(emptyState('No pending pairing requests.'));
+  const allowWrite = result.settings.mode === 'read-write' && result.allowedModes.includes('read-write');
+  const connectionMode = allowWrite ? 'read and write' : 'read only';
+  get('connection-mode-note').textContent = allowWrite
+    ? 'Connecting grants this client reading and supported actions on the selected tab. The applied write approval setting controls action prompts. Clicks can submit data or cause irreversible changes.'
+    : 'Connecting grants this client read-only access to the selected tab. Page actions are unavailable. Apply Read and write mode before connecting if you want to allow actions.';
   get('clients').replaceChildren(...result.clients.map((value: { id: string; name?: string }) => {
     const connection = result.connections.find((connection: { clientId: string }) => connection.clientId === value.id);
     const { row, actions } = clientRow(`Client ID: ${value.id}`, value.name, connection ? `Connected tab: ${connection.tabTitle ?? 'Title unavailable'}` : selectedTabLabel);
-    const connect = button('Connect selected tab', async () => { const result = await request('connect', { clientId: value.id, sourceId, allowWrite: get<HTMLInputElement>('allow-write').checked }); get<HTMLInputElement>('allow-write').checked = false; status.textContent = `Connected. Give your assistant connectionId: ${result.connectionId}`; await load(); }); connect.disabled = !sourceId;
+    const connect = button(`Connect selected tab (${connectionMode})`, async () => { const result = await request('connect', { clientId: value.id, sourceId, allowWrite }); status.textContent = `Connected. Give your assistant connectionId: ${result.connectionId}`; await load(); }); connect.disabled = !sourceId;
+    connect.setAttribute('aria-describedby', 'connection-mode-note');
     actions.append(connect, button('Revoke', async () => { clear(); await request('revoke', { clientId: value.id }); await load(); }));
     const editor = document.createElement('details'); editor.className = 'client-name-editor';
     const summary = document.createElement('summary'); summary.textContent = 'Edit client name';
@@ -107,7 +112,7 @@ async function load() {
       await request('rename', { clientId: value.id, name: input.value.trim() }); clear(); await load();
       status.textContent = 'Client name saved. Reconnect the selected tab if needed.';
     }); save.disabled = locked;
-    const note = document.createElement('p'); note.className = 'note'; note.textContent = 'Changing a name ends current tab connections. Reconnect the tab after saving.';
+    const note = document.createElement('p'); note.className = 'note'; note.textContent = "Changing this client's name ends its tab connections. Reconnect the tab after saving.";
     editor.append(summary, label, save, note); row.append(editor); return row;
   }));
   if (!result.clients.length) get('clients').append(emptyState('No approved clients yet. Pair a client through the helper to get started.'));
@@ -120,7 +125,7 @@ async function load() {
 }
 async function run(action: () => Promise<void>) { try { await action(); } catch (error) { clearTimeout(connectionRefresh); connectionRefresh = undefined; clear(); locked = true; testAllowed = false; appliedEnabled = false; controls(); status.textContent = error instanceof McpUiError ? error.message : unavailableMessage; } }
 get('preferences').addEventListener('input', () => { modified = true; clear(); controls(); });
-get('preferences').addEventListener('submit', event => { event.preventDefault(); void run(async () => { clear(); await request('apply', { settings: draft(), revision }); modified = false; await load(); status.textContent = 'Settings applied. Reconnect the helper and tab if needed.'; }); });
+get('preferences').addEventListener('submit', event => { event.preventDefault(); void run(async () => { clear(); await request('apply', { settings: draft(), revision }); modified = false; await load(); status.textContent = 'Settings applied. A running helper reconnects once if permissions allow. Reconnect the selected tab; use Start helper connection if the helper stays disconnected.'; }); });
 get('start').addEventListener('click', () => void run(async () => {
   const granted = await requestMcpPermissions(get<HTMLSelectElement>('mode').value === 'read-write');
   if (!granted) throw new Error('permission-required');

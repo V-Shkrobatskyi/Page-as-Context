@@ -70,6 +70,22 @@ it.each(['ready', 'disconnected'])('refreshes a connecting helper automatically 
   expect(fixture.send).toHaveBeenCalledTimes(requests);
 });
 
+it.each(['read-only', 'read-write'] as const)('grants the applied %s mode through the labeled Connect button, ignoring unsaved mode changes', async mode => {
+  const initial = { ...state(true), settings: { ...state(true).settings, mode }, clients: [{ id: 'approved_client_001' }] };
+  fixture.send.mockImplementation(async message => message.action === 'read' ? initial : { ok: true, connectionId: 'new_connection_001' });
+  await import('@/entrypoints/mcp/main');
+  await vi.waitFor(() => expect(document.querySelector('#clients button')).not.toBeNull());
+  const connect = document.querySelector('#clients button') as HTMLButtonElement;
+  expect(connect.textContent).toBe(`Connect selected tab (${mode === 'read-write' ? 'read and write' : 'read only'})`);
+  const select = document.getElementById('mode') as HTMLSelectElement;
+  select.value = mode === 'read-only' ? 'read-write' : 'read-only';
+  select.dispatchEvent(new Event('input', { bubbles: true }));
+  connect.click();
+  await vi.waitFor(() => expect(fixture.send).toHaveBeenCalledWith({ type: 'mcp-ui-v1', action: 'connect',
+    clientId: 'approved_client_001', sourceId: location.hash.slice(1), allowWrite: mode === 'read-write' }));
+  await vi.waitFor(() => expect(document.getElementById('status')!.textContent).toContain('new_connection_001'));
+});
+
 it('cancels automatic connection refresh when the settings page closes', async () => {
   vi.useFakeTimers();
   fixture.send.mockResolvedValue({ ...state(true), transport: 'connecting' });

@@ -25,8 +25,10 @@ This package is not listed in the public plugin directory.
    Pairing requests** in the extension and approve there. **Refresh status** is
    a fallback if the request has not appeared. Previously approved profiles
    may report approval immediately. Pairing does not share a tab.
-6. Open the source tab, choose **Connect MCP** in the popup, then **Connect
-   selected tab** for this client. Give the assistant the displayed **Connection**
+6. Open the source tab, choose **Connect MCP** in the popup, then connect
+   the selected tab for this client. The button shows the applied mode: **read
+   only** or **read and write**. To allow actions, apply **Read and write** and
+   choose **Connect selected tab (read and write)**. Give the assistant the displayed **Connection**
    ID. Use this plugin's `browser-chrome` or `browser-firefox` tools.
 
 Setup runs through the plugin; there is no separate setup application. The

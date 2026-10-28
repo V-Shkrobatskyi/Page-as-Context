@@ -2,13 +2,24 @@
 
 Page as Context can share filtered context from one explicitly connected tab
 with an external MCP client. MCP starts disabled. The implementation supports **Read only** and **Read and write**. Write access
-requires a separate explicit grant when connecting the tab. Every action opens
+is granted by **Connect selected tab (read and write)** in **Approved clients**
+after applying that mode. In **Read only**, the button grants reading only.
+Unsaved mode changes do not affect the connection. Every action opens
 an extension-owned approval page by default; closing or denying it prevents the
 action. **Allow for this connection** lets the user approve supported actions for
 one explicitly connected tab until navigation, expiry or disconnection. It is
 available unless organization policy requires approval before each action. The
 default remains **Ask before each action**; the AI client may also request its
 own confirmations.
+
+Applying MCP settings invalidates active tab grants, snapshots and pending
+actions. If the helper was running, the extension attempts to reconnect it once
+using existing permissions and the newly applied settings. It never restores
+tab access or repeats an action. If MCP is disabled, policy blocks access,
+permissions are missing or that attempt fails, it stays disconnected. Use
+**Start helper connection** to retry manually and approve any required permissions.
+**Stop all MCP access** cancels a pending reconnection. Managed policy changes
+do not trigger an automatic connection.
 
 For packaged ChatGPT desktop setup on macOS Apple silicon, install the **Page as
 Context** plugin and ask it to set up your browser in chat. Review the prepared
@@ -197,8 +208,11 @@ Navigation, tab closure/discard, permission revocation, settings or policy chang
 invalidate access. This implementation conservatively disconnects tab grants
 on all navigation, including same-origin changes. Reconnect through the popup.
 Browser/background/helper restarts never restore tab grants. **Stop** closes the
-native port and clears live access; **Revoke** also removes the approved client.
-Neither can retract data already delivered to a client.
+native port and clears live access. **Revoke** removes only the selected client's
+approval, grants, snapshots and pending actions; it leaves the helper and other
+clients connected. Revoking while the helper is stopped does not start it.
+Renaming a client ends that client's tab grants without affecting other clients.
+Neither Stop nor Revoke can retract data already delivered to a client.
 
 ## Removal and recovery
 

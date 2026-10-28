@@ -128,9 +128,6 @@
         <h2 id="source-heading">Selected tab</h2>
         <div class="settings-panel">
           <p id="source">Open the extension popup on the page you want to share and choose Connect MCP. This settings page is never used as the source.</p>
-          <label class="check-option write-grant"><input type="checkbox" id="allow-write" aria-describedby="write-note" /><span>Allow supported actions when connecting a client to this tab</span></label>
-          <p id="write-note" class="note">Only available in Read and write mode. Access ends when the connection expires. Clicks can submit data or cause irreversible changes.</p>
-          <p id="connections" class="connection-list"></p>
         </div>
       </section>
 
@@ -143,8 +140,10 @@
         </div>
         <div class="settings-panel client-panel">
           <h3>Approved clients</h3>
-          <p class="note">Choose a client to connect the selected tab, or revoke its access.</p>
+          <p class="note">Choose a client to connect the selected tab, or revoke its access. Revoke removes only that client's approval and connections; the helper and other clients stay connected.</p>
+          <p id="connection-mode-note" class="note">Connecting a tab grants access in the applied mode shown on the button. Changing settings alone does not connect a tab.</p>
           <div id="clients"><p class="empty-state">No approved clients yet. Pair a client through the helper to get started.</p></div>
+          <p id="connections" class="connection-list"></p>
         </div>
       </section>
 

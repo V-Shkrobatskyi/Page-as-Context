@@ -30,7 +30,6 @@
 .mcp-content .connection-details { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
 .mcp-content summary { cursor: pointer; font-size: .9rem; font-weight: 600; }
 .mcp-content .instance-id { margin: 12px 0 0; overflow-wrap: anywhere; color: var(--muted); font: .8125rem/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
-.mcp-content .write-grant { margin-top: 16px; }
 .mcp-content .connection-list { white-space: pre-line; overflow-wrap: anywhere; font-size: .875rem; }
 .mcp-content .connection-list:not(:empty) { margin: 16px 0 0; padding-top: 16px; border-top: 1px solid var(--border); }
 .mcp-content .connection-list:empty, .mcp-content #captured:empty { display: none; }
