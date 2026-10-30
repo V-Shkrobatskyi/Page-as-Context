@@ -1,11 +1,11 @@
 // Copyright (c) 2026 Vitalii Shkrobatskyi
 // SPDX-License-Identifier: GPL-3.0-only
-import { browser } from 'wxt/browser';
+import { getMcpTab } from './tab';
 import { captureActiveTab } from '../adapters/capture';
 import { sourceAllowed } from '../policy/sources';
 import { assertAction, PolicyError } from '../policy/model';
 import { prepareExport } from '../core/export';
-import { resolveMcpSettings, type McpSettings } from './settings';
+import { resolveMcpSettings, mcpWritesEnabled, type McpSettings } from './settings';
 import { createActionSnapshot } from '../adapters/actions/snapshot';
 import type { ActionSnapshot } from '../adapters/actions/contract';
 import type { CompressionLevel } from '../core/contracts';
@@ -19,9 +19,9 @@ export async function readMcpContext(tabId: number, authorize: () => void, previ
   assertAction(effective.snapshot.policy, preview ? 'mcp-test' : 'mcp-read');
   if (!effective.modeAllowed) throw new Error('unsupported-combination');
   if (!preview && !effective.settings.enabled) throw new PolicyError('MCP is disabled.');
-  const tab = await browser.tabs.get(tabId);
+  const tab = await getMcpTab(tabId);
   if (tab.incognito || tab.discarded || !tab.url || !/^https?:\/\//u.test(tab.url) || !sourceAllowed(tab.url, effective.controls.sources)) throw new PolicyError('This source is unavailable for MCP.');
-  const write = effective.settings.mode === 'read-write' && access?.write === true;
+  const write = mcpWritesEnabled(effective.settings) && access?.write === true;
   if (write) assertAction(effective.snapshot.policy, 'mcp-write');
   let compression = effective.preferences.compression;
   const warnings: string[] = [];
@@ -40,7 +40,7 @@ export async function readMcpContext(tabId: number, authorize: () => void, previ
     { ...effective.controls, ...(lease ? { actions: lease } : {}) });
   authorize();
   const current = await resolveMcpSettings(draft);
-  const currentTab = await browser.tabs.get(tabId);
+  const currentTab = await getMcpTab(tabId);
   if (signal.aborted || current.revision !== effective.revision || currentTab.url !== tab.url || currentTab.discarded || currentTab.incognito) throw new PolicyError('The page or MCP settings changed. Capture again.');
   if (!result.ok) throw new Error(result.error.code);
   const output = prepareExport(result.tree, compression, effective.preferences.format, effective.preferences.redactSensitiveData,

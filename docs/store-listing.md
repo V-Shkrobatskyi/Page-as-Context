@@ -9,10 +9,10 @@ package; adjust browser-specific details when preparing a Chrome listing.
 - Name: Page as Context
 - Suggested category: Productivity (select the closest available category in each dashboard)
 - Support email: copyascontext@gmail.com
-- Support website: https://github.com/V-Shkrobatskyi/Copy-as-Context/issues
-- Homepage: https://github.com/V-Shkrobatskyi/Copy-as-Context
+- Support website: https://github.com/V-Shkrobatskyi/Page-as-Context/issues
+- Homepage: https://github.com/V-Shkrobatskyi/Page-as-Context
 - License: GNU General Public License v3.0 only (GPL-3.0-only)
-- Privacy policy: https://github.com/V-Shkrobatskyi/Copy-as-Context/blob/main/PRIVACY.md
+- Privacy policy: https://github.com/V-Shkrobatskyi/Page-as-Context/blob/main/PRIVACY.md
 
 ## Short description
 
@@ -37,7 +37,7 @@ Voluntary developer-support links do not unlock functionality or affect export b
 Free software licensed under GNU GPL version 3 only. Personal and commercial use
 are permitted. The extension's License page provides the full terms and links to
 the corresponding source for the installed version. When publishing, add the
-verified public `https://github.com/V-Shkrobatskyi/Copy-as-Context/releases/tag/vX.Y.Z`
+verified public `https://github.com/V-Shkrobatskyi/Page-as-Context/releases/tag/vX.Y.Z`
 URL for that release; replace X.Y.Z with the submitted version.
 
 ## Permission justifications
@@ -87,4 +87,4 @@ The `popup-settings` storage key is unchanged from version 1.1.0. Theme keys and
 
 ## MCP disclosure update for the next store submission
 
-Optional MCP shares filtered content from one explicitly connected tab with an external client through a separately installed local helper. The client may transmit it to its model provider. Read and write adds browser-approved native-control interactions. No developer-hosted capture service or analytics is introduced. Declare optional nativeMessaging, the additional debugger/scripting use, and Firefox optional websiteContent/browsingActivity/personalCommunications transmission consent, plus websiteActivity for write mode. Validate store forms and real consent prompts before publication; published store names and extension IDs are unchanged.
+Optional MCP shares filtered content from explicitly permitted tabs with an external client through a separately installed local helper. The client may transmit it to its model provider. Read and write adds browser-approved native-control interactions. No developer-hosted capture service or analytics is introduced. Declare optional nativeMessaging, the additional debugger/scripting use, and Firefox optional websiteContent/browsingActivity/personalCommunications transmission consent, plus websiteActivity for write mode. Alarms schedule bounded MCP reconnect and expiry work without page capture. Automatic mode supports shared-tab discovery without listing unshared tabs, per-tab Off/Read/Write, and independent trusted clients. Validate store forms and real consent prompts before publication; published store names and extension IDs are unchanged.

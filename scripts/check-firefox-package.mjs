@@ -47,7 +47,7 @@ for (const path of paths(extension)) {
 const manifest = JSON.parse(await extension.file('manifest.json').async('string'));
 assert.equal(manifest.version, pkg.version);
 assert.deepEqual(manifest.browser_specific_settings.gecko_android, { strict_min_version: '142.0' });
-assert.deepEqual([...manifest.permissions].sort(), ['activeTab', 'scripting', 'clipboardWrite', 'storage'].sort());
+assert.deepEqual([...manifest.permissions].sort(), ['activeTab', 'scripting', 'clipboardWrite', 'storage', 'alarms'].sort());
 assert.deepEqual(manifest.optional_permissions, ['downloads', 'nativeMessaging']);
 assert.deepEqual(manifest.optional_host_permissions, ['http://*/*', 'https://*/*']);
 assert.deepEqual(manifest.browser_specific_settings.gecko.data_collection_permissions.required, ['none']);

@@ -2,21 +2,33 @@
   "manifest_version": "0.3",
   "name": "page-as-context",
   "display_name": "Page as Context",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Read filtered context and perform explicitly authorized actions in a connected Chrome or Firefox tab.",
-  "long_description": "Private macOS Apple silicon desktop extension. Select chrome or firefox in configuration, then ask Claude to set up that browser. Review local setup changes, compare the pairing code in the extension and approve there. Connect each source tab explicitly. Browser action approvals and privacy filters remain active. Includes its Node runtime; no terminal or separate setup app is needed.",
-  "author": { "name": "Vitalii Shkrobatskyi" },
+  "long_description": "Private macOS Apple silicon desktop extension. Select chrome or firefox, then ask Claude to set up that browser. Review local setup changes, compare the pairing code and approve in the browser popup. In Automatic mode choose AI: Read or Write on each tab. Includes its Node runtime; no terminal or separate setup app is needed.",
+  "author": {
+    "name": "Vitalii Shkrobatskyi"
+  },
   "license": "GPL-3.0-only",
   "server": {
     "type": "binary",
     "entry_point": "runtime/node",
     "mcp_config": {
       "command": "${__dirname}/runtime/node",
-      "args": ["${__dirname}/server.mjs", "${user_config.browser}"],
-      "env": { "NODE_OPTIONS": "", "NODE_PATH": "" }
+      "args": [
+        "${__dirname}/server.mjs",
+        "${user_config.browser}"
+      ],
+      "env": {
+        "NODE_OPTIONS": "",
+        "NODE_PATH": ""
+      }
     }
   },
-  "compatibility": { "platforms": ["darwin"] },
+  "compatibility": {
+    "platforms": [
+      "darwin"
+    ]
+  },
   "user_config": {
     "browser": {
       "type": "string",
@@ -26,5 +38,10 @@
     }
   },
   "tools_generated": true,
-  "keywords": ["browser", "privacy", "context", "local"]
+  "keywords": [
+    "browser",
+    "privacy",
+    "context",
+    "local"
+  ]
 }

@@ -83,3 +83,13 @@ Pairing display names: add `--name "ChatGPT — Firefox"` to `pair`. The default
 is `page-as-context-<browser>`. Names are bounded display labels, not verified
 identities or authorization. Existing unnamed browser approvals remain valid;
 the extension can give them a local name without changing their credential.
+
+## Authorized tab discovery
+
+`list_shared_tabs` and `resolve_shared_tab` expose only currently authorized
+connections for the authenticated client, including active/window hints. They
+never grant access, enumerate unshared metadata or return raw URLs. Page tools
+still require a concrete connection ID and write tools require a fresh snapshot.
+Automatic mode connects the browser after setup; Manual retains Start. The
+browser owns shared-access membership, tab expiry, Pause/Resume and recovery.
+ChatGPT, Claude Desktop and Claude Code use independent profiles/credentials.

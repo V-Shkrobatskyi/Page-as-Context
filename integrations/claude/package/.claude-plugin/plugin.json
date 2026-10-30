@@ -1,0 +1,9 @@
+{
+  "name": "page-as-context",
+  "version": "0.2.0",
+  "description": "Page as Context for Claude: shared browser context and explicitly authorized page actions.",
+  "author": {
+    "name": "Vitalii Shkrobatskyi"
+  },
+  "license": "GPL-3.0-only"
+}

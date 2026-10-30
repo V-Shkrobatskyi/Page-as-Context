@@ -19,8 +19,8 @@ npm run zip:firefox
 ```
 
 The installed extension files are in `.output/firefox-mv3/`. The unsigned archive
-is `.output/page-as-context-2.0.1-firefox.zip`; the accompanying source archive is
-`.output/page-as-context-2.0.1-sources.zip`. Filenames use the package version, so
+is `.output/page-as-context-2.1.0-firefox.zip`; the accompanying source archive is
+`.output/page-as-context-2.1.0-sources.zip`. Filenames use the package version, so
 they change when the version changes. Compare uncompressed file paths and bytes
 with the submitted extension ZIP; ZIP container timestamps are not build content.
 
@@ -52,7 +52,7 @@ Full contributor checks run from the repository with `npm run check`.
 npm run zip
 ```
 
-The Chrome package is `.output/page-as-context-2.0.1-chrome.zip`, built from
+The Chrome package is `.output/page-as-context-2.1.0-chrome.zip`, built from
 `.output/chrome-mv3/`. Upload the extension ZIP, not the reviewer sources.
 
 ## Shared Firefox Desktop and Android package
@@ -74,3 +74,12 @@ Load a development build using the [README installation steps](README.md).
 Build commands produce unsigned packages. Publishing and signing are covered in
 [the release guide](docs/releasing.md); Firefox-specific metadata is documented
 [in the AMO guide](docs/firefox-release.md).
+
+## Simplified MCP packages
+
+ChatGPT source version is 1.2.0; the shared Claude integration is 0.2.0
+for both Desktop and Code, with client-specific installation manifests. The common helper is 0.2.0. Use the existing
+ChatGPT builder with `--client claude-code` for the Claude Code package; see
+[integration build notes](integrations/claude/README.md). All packages use
+the same checksum-verified Node 24.10.0 archive. Icon variants can be regenerated
+with `python3 scripts/render-ai-icons.py` (Pillow required for regeneration only).

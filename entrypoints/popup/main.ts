@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Vitalii Shkrobatskyi
 // SPDX-License-Identifier: GPL-3.0-only
+import { installMcpPopup } from '@/src/mcp/popup';
+
 
 import { isManaged } from '@/src/policy/model';
 
@@ -98,8 +100,10 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         <button id="preview" class="preview-action" type="button" title="Preview and edit context" aria-label="Preview and edit context"><svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span>Preview</span></button>
         <button id="select-element" class="preview-action" type="button" title="Select an element to capture" aria-label="Select an element to capture"><svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7"/><path d="M12 2v5m0 10v5M2 12h5m10 0h5"/></svg><span>Select</span></button>
         <button id="mcp-connect" class="preview-action" type="button" title="Connect this tab to MCP" aria-label="Connect this tab to MCP"><svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m10 13 4-4m-6 6-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 2 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/></svg><span>Connect MCP</span></button>
+        <div id="ai-control" class="ai-control" role="group" aria-label="AI access to this tab" hidden><button id="ai-prev" type="button" aria-label="Decrease AI access" disabled>&lt;</button><span id="ai-menu" role="status" aria-live="polite">AI Off</span><button id="ai-next" type="button" aria-label="Increase AI access" disabled>&gt;</button></div>
       </div>
     </section>
+    <section id="ai-details" class="ai-details" hidden aria-label="AI connection"><p id="ai-status" role="status" hidden></p></section>
     <section class="settings-panel" aria-label="Export preferences">
       <fieldset class="field compression-field">
         <legend>Compression</legend>
@@ -139,7 +143,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       <p class="status" role="status" aria-live="polite"></p>
       <p class="metrics" aria-live="polite"></p>
     </section>
-    <footer class="help"><a id="guide-link" target="_blank" rel="noopener">Guide</a> · <a id="diagnostics-link" href="/data-controls.html" target="_blank" rel="noopener">Data controls</a> · <a id="shortcuts-link" href="#">Shortcuts</a> · <a id="license-link" href="/license.html" target="_blank" rel="noopener">License</a></footer>
+    <footer class="help"><a id="guide-link" target="_blank" rel="noopener">Guide</a> · <a id="diagnostics-link" href="/data-controls.html" target="_blank" rel="noopener">Data controls</a> · <a id="mcp-link" href="/mcp.html" target="_blank" rel="noopener">MCP</a> · <a id="shortcuts-link" href="#">Shortcuts</a> · <a id="license-link" href="/license.html" target="_blank" rel="noopener">License</a></footer>
 
   </main>
 `;
@@ -293,7 +297,9 @@ document.querySelector<HTMLAnchorElement>('#shortcuts-link')!.addEventListener('
 });
 const diagnosticsLink = document.querySelector<HTMLAnchorElement>('#diagnostics-link')!;
 diagnosticsLink.href = browser.runtime.getURL('/data-controls.html');
-for (const [link, path] of [[guideLink, '/guide.html'], [diagnosticsLink, '/data-controls.html'], [licenseLink, '/license.html']] as const) {
+const mcpLink = document.querySelector<HTMLAnchorElement>('#mcp-link')!;
+mcpLink.href = browser.runtime.getURL('/mcp.html');
+for (const [link, path] of [[guideLink, '/guide.html'], [diagnosticsLink, '/data-controls.html'], [mcpLink, '/mcp.html'], [licenseLink, '/license.html']] as const) {
   link.addEventListener('click', event => {
     event.preventDefault();
     void browser.tabs.create({ url: browser.runtime.getURL(path), active: true })
@@ -573,6 +579,11 @@ const mcpConnect = document.querySelector<HTMLButtonElement>('#mcp-connect');
 mcpConnect?.addEventListener('click', () => {
   mcpConnect.disabled = true;
   void browser.runtime.sendMessage({ type: 'mcp-ui-v1', action: 'source' }).then(result => {
-    if (result?.ok) window.close(); else { mcpConnect.disabled = false; status.textContent = 'MCP is unavailable for this page or organization policy.'; }
-  }, () => { mcpConnect.disabled = false; status.textContent = 'Unable to open MCP settings.'; });
+    if (result?.ok) window.close(); else {
+      mcpConnect.disabled = false;
+      showFeedback(result?.code === 'unsupported-page' ? ERROR_MESSAGES['unsupported-page']! : 'MCP is unavailable for this page or organization policy.');
+    }
+  }, () => { mcpConnect.disabled = false; showFeedback('Unable to open MCP settings.'); });
 });
+
+installMcpPopup();

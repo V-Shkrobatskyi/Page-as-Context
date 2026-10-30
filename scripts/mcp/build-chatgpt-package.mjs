@@ -7,8 +7,11 @@ import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 
 const repo = fileURLToPath(new URL('../../', import.meta.url));
-const sourceManifest = JSON.parse(await readFile(join(repo, 'integrations/chatgpt/package/plugin.json'), 'utf8'));
-const { values } = parseArgs({ options: { archive: { type: 'string' }, output: { type: 'string' }, version: { type: 'string', default: sourceManifest.version } } });
+const { values } = parseArgs({ options: { archive: { type: 'string' }, output: { type: 'string' }, version: { type: 'string' }, client: { type: 'string', default: 'chatgpt' } } });
+if (!['chatgpt', 'claude-code'].includes(values.client)) throw new Error('Select chatgpt or claude-code.');
+const integration = values.client === 'chatgpt' ? 'chatgpt' : 'claude';
+const sourceManifest = JSON.parse(await readFile(join(repo, `integrations/${integration}/package/plugin.json`), 'utf8'));
+values.version ??= sourceManifest.version;
 if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('This package targets macOS Apple silicon only.');
 if (!values.archive || !values.output || !/^\d+\.\d+\.\d+$/u.test(values.version)) throw new Error('Pass --archive, a new --output directory, and an optional semantic --version.');
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -18,9 +21,14 @@ if (digest(await readFile(archive)) !== expected) throw new Error('Official Node
 await mkdir(dirname(output), { recursive: true }); await mkdir(output);
 const marketplace = join(output, 'marketplace'), plugin = join(marketplace, 'plugins/page-as-context');
 await mkdir(join(plugin, 'runtime'), { recursive: true });
-await cp(join(repo, 'integrations/chatgpt/package'), plugin, { recursive: true });
+await cp(join(repo, `integrations/${integration}/package`), plugin, { recursive: true });
 const manifest = JSON.parse(await readFile(join(plugin, 'plugin.json'), 'utf8')); manifest.version = values.version;
 await writeFile(join(plugin, 'plugin.json'), JSON.stringify(manifest, null, 2) + '\n');
+if (values.client === 'claude-code') {
+  await writeFile(join(plugin, '.claude-plugin/plugin.json'), JSON.stringify(manifest, null, 2) + '\n');
+  const desktop = JSON.parse(await readFile(join(plugin, 'manifest.json'), 'utf8')); desktop.version = values.version;
+  await writeFile(join(plugin, 'manifest.json'), JSON.stringify(desktop, null, 2) + '\n');
+}
 execFileSync('/usr/bin/tar', ['-xzf', archive, '-C', join(plugin, 'runtime'), '--strip-components=2', 'node-v24.10.0-darwin-arm64/bin/node']);
 execFileSync('/usr/bin/tar', ['-xzf', archive, '-C', join(plugin, 'runtime'), '--strip-components=1', 'node-v24.10.0-darwin-arm64/LICENSE']);
 await chmod(join(plugin, 'runtime/node'), 0o755);
@@ -30,8 +38,13 @@ await cp(join(repo, 'helper/src'), join(plugin, 'helper/src'), { recursive: true
 execFileSync('npm', ['ci', '--prefix', join(plugin, 'helper'), '--omit=dev', '--ignore-scripts', '--bin-links=false', '--offline', '--no-audit', '--no-fund'], { stdio: 'pipe' });
 const lock = JSON.parse(await readFile(join(plugin, 'helper/package-lock.json'), 'utf8'));
 await writeFile(join(plugin, 'DEPENDENCIES.json'), JSON.stringify({ node: { version: '24.10.0', platform: 'darwin', arch: 'arm64', archiveSha256: expected }, packages: Object.entries(lock.packages).filter(([path]) => path).map(([path, entry]) => ({ path, version: entry.version, license: entry.license, integrity: entry.integrity })) }, null, 2) + '\n');
+if (values.client === 'claude-code') {
+  await mkdir(join(marketplace, '.claude-plugin'), { recursive: true });
+  await writeFile(join(marketplace, '.claude-plugin/marketplace.json'), JSON.stringify({ name: 'page-as-context-local', owner: { name: 'Vitalii Shkrobatskyi' }, plugins: [{ name: 'page-as-context', source: './plugins/page-as-context' }] }, null, 2) + '\n');
+} else {
 await mkdir(join(marketplace, '.agents/plugins'), { recursive: true });
 await writeFile(join(marketplace, '.agents/plugins/marketplace.json'), JSON.stringify({ name: 'page-as-context-desktop', interface: { displayName: 'Page as Context' }, plugins: [{ name: 'page-as-context', source: { source: 'local', path: './plugins/page-as-context' }, policy: { installation: 'AVAILABLE', authentication: 'ON_INSTALL' }, category: 'Productivity' }] }, null, 2) + '\n');
+}
 const files = {};
 async function inventory(root, prefix = '') {
   for (const name of (await readdir(root)).sort()) {
@@ -43,8 +56,8 @@ async function inventory(root, prefix = '') {
 }
 await inventory(marketplace);
 await writeFile(join(marketplace, 'PACKAGE.json'), JSON.stringify({ format: 1, version: values.version, platform: 'darwin', arch: 'arm64', files }, null, 2) + '\n');
-await copyFile(join(repo, 'integrations/chatgpt/PACKAGE-README.md'), join(output, 'README.md'));
-const zip = `Page-as-Context-ChatGPT-${values.version}-macOS-arm64-plugin.zip`;
+await copyFile(join(repo, `integrations/${integration}/PACKAGE-README.md`), join(output, 'README.md'));
+const zip = `Page-as-Context-${values.client === 'chatgpt' ? 'ChatGPT' : 'Claude-Code'}-${values.version}-macOS-arm64-plugin.zip`;
 execFileSync('/usr/bin/ditto', ['-c', '-k', '--keepParent', marketplace, join(output, zip)]);
 await writeFile(join(output, 'SHA256SUMS.txt'), `${digest(await readFile(join(output, zip)))}  ${zip}\n`);
 console.log(JSON.stringify({ marketplace, archive: join(output, zip), version: values.version, platform: 'macOS arm64', setupApp: false, packageFiles: Object.keys(files).length }));

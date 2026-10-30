@@ -18,17 +18,20 @@ or approve access. Setup does not grant access to any tab.
    not evidence of human approval; the client should also prompt for the
    mutating `confirm_browser_setup` tool.
 4. Call `confirm_browser_setup` with its `requestId` and `confirmed: true`.
-   Have the user click **Start helper connection** in the extension. Call
+   Automatic mode connects the bridge; use **Retry connection** if needed. Only in Manual mode ask for **Start helper connection**. Call
    `get_pairing_status` using that request ID. If still waiting, tell the user
    what is pending; avoid a tight polling loop.
 5. When a code is returned, display it and ask the user to compare it with
-   **Pairing and clients → Pairing requests** in the extension. The user must
-   approve there. Refresh status is a fallback if the request has not appeared.
+   the pairing request in **Pairing and clients** on the MCP settings page. Automatic opens this page in an active browser tab for a new request. The user must
+   approve there. In Automatic, approval gives this app access to tabs already marked Read or Write; no extra opt-in is needed. Refresh status is a fallback if the request has not appeared.
    Never approve pairing through browser automation or on the user's behalf.
-6. Check pairing status again. After approval, have the user open a source tab,
-   select **Connect MCP** in the popup, and **Connect selected tab** for this
-   client. Ask for the displayed **Connection** ID; an instance or client ID is
-   not a connection ID. Read only after the user chooses to share that tab.
+6. Check pairing status again. After approval, have the user open a source tab
+   and choose **AI: Read** or **AI: Write** in its popup (Manual: Connect MCP →
+   Connect selected tab). Call `list_shared_tabs` or `resolve_shared_tab` to obtain
+   the current connection ID. Never ask the user to copy connection IDs. Do not
+   substitute an instance or client ID. If the active tab is not shared, ask the
+   user to choose Read or Write; never silently use another tab.
+
 
 If the app closes during pairing, start a new prepared request. Keep the
 existing profile; never reset or overwrite it automatically. A different

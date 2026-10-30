@@ -1,6 +1,6 @@
-# Claude Desktop MCPB
+# Page as Context for Claude
 
-Experimental private macOS Apple silicon package. Uses the shared MCP server,
+One private macOS Apple silicon integration for Claude Desktop and Claude Code. Both installation formats use the same source directory, server, helper, runtime and version. Client entry points retain independent credentials. Uses the shared MCP server,
 setup, broker and native transport in `helper/`; it contains no browser adapter
 or duplicate grant/permission implementation. See [the package user guide](PACKAGE-README.md).
 
@@ -13,9 +13,9 @@ official Node 24.10.0 macOS arm64 archive and pinned MCPB build tooling:
 npm ci --prefix integrations/claude --ignore-scripts
 node scripts/mcp/build-claude-package.mjs \
   --archive /path/to/node-v24.10.0-darwin-arm64.tar.gz \
-  --output 'artifacts/mcp/Claude 0.1.0 macOS arm64'
+  --output 'artifacts/mcp/Claude 0.2.0 macOS arm64'
 node scripts/mcp/check-claude-package.mjs \
-  'artifacts/mcp/Claude 0.1.0 macOS arm64/Page-as-Context-Claude-0.1.0-macOS-arm64.mcpb'
+  'artifacts/mcp/Claude 0.2.0 macOS arm64/Page-as-Context-Claude-0.2.0-macOS-arm64.mcpb'
 ```
 
 The archive's official Node checksum is verified before extraction. Output
@@ -72,3 +72,23 @@ References reviewed 26 October 2026:
 Actual Claude/browser acceptance, shared-client isolation and full update/removal
 qualification remain required before claiming support. The bundle is unsigned
 and has not been submitted to a public directory.
+
+## Claude Code installation format
+
+The same `package/` source includes `.claude-plugin/plugin.json` and `.mcp.json`.
+The Desktop entry point selects `--client desktop` by default; the Code manifest
+explicitly selects `--client code`. No model/tool argument selects identity.
+Both formats are version 0.2.0. A root `plugin.json` mirrors plugin identity for
+the common package inventory verifier; Desktop reads `manifest.json` instead.
+
+```sh
+node scripts/mcp/build-chatgpt-package.mjs --client claude-code \
+  --archive /private/tmp/node-v24.10.0-darwin-arm64.tar.gz \
+  --output 'artifacts/mcp/Claude 0.2.0 plugin macOS arm64'
+```
+
+Check the extracted marketplace using its bundled `runtime/node` with
+`scripts/mcp/check-chatgpt-package.mjs MARKETPLACE claude-code chrome` and the
+same invocation with `firefox`. This is isolated SDK evidence, not actual Code
+installation. Official plugin manifest reference reviewed 29 October 2026:
+https://code.claude.com/docs/en/plugins-reference

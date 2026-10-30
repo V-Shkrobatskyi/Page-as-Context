@@ -23,7 +23,7 @@ SPDX-License-Identifier: GPL-3.0-only
         <a href="mcp.html">MCP</a>
         <a href="guide.html">Guide</a>
       </div>
-      <div class="site-nav-secondary"><a href="privacy.html" aria-current="page">Privacy</a> <a href="license.html">License</a> <a href="https://github.com/V-Shkrobatskyi/Copy-as-Context" target="_blank" rel="noopener noreferrer">GitHub ↗</a></div>
+      <div class="site-nav-secondary"><a href="privacy.html" aria-current="page">Privacy</a> <a href="license.html">License</a> <a href="https://github.com/V-Shkrobatskyi/Page-as-Context" target="_blank" rel="noopener noreferrer">GitHub ↗</a></div>
 
       <label class="theme-picker">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none"/></svg>
@@ -92,7 +92,7 @@ SPDX-License-Identifier: GPL-3.0-only
     </nav>
     <main class="page-main prose">
       <h1>Privacy policy for Page as Context</h1>
-      <p>Last updated: 2026-10-28. Applies to version 2.0.1.</p>
+      <p>Last updated: 2026-10-29. Applies to version 2.1.0.</p>
 
       <section aria-labelledby="processing">
         <h2 id="processing">Information and local processing</h2>
@@ -128,8 +128,10 @@ SPDX-License-Identifier: GPL-3.0-only
 
       <section aria-labelledby="sharing">
         <h2 id="sharing">Sharing and external services</h2>
-        <p><strong>Optional MCP:</strong> disabled by default. Explicit pairing and a tab grant let an external client request filtered context through a separately installed local helper. That client may send it to a model provider. Read and write requires additional browser consent; actions can submit data or cause irreversible changes. Each action asks for browser approval by default. Stop/revoke clears live access but cannot recall delivered data. Restarts never restore live grants.</p>
-        <p>Pairing stores credential hashes locally; the helper stores credentials in protected local files. Page payloads and transient refs are not persisted in preferences or diagnostics. Entered values are not saved in approval history. Firefox separately requests optional website-content, browsing-activity and personal-communication transmission consent, plus website-activity consent for write mode. Declining keeps ordinary export available.</p>
+        <p><strong>Optional MCP:</strong> disabled by default. New installations use Automatic connection; existing users stay Manual until switching. Choose AI Off, Read or Write for each tab; Read can be selected before a client connects. In Automatic, one-time code comparison and pairing approval authorize each client for all tabs marked Read or Write, without another shared-access opt-in. Write includes reading and supported actions, with browser approval by default. Independent clients can share multiple explicitly permitted tabs.</p>
+        <p>The helper uses local IPC and Native Messaging; the AI client may forward returned context to its model provider. Automatic access defaults to one hour of inactivity for Read and Write. Successful reads and applied actions renew only that tab; status and discovery do not. Users can choose minutes, hours, days or unlimited, subject to organization session caps. Automatic Read and Write stay with the tab across reloads and site changes, including private sites, subject to privacy filters and source policies. Navigation does not renew expiry; new tabs start Off. Transport recovery restores only authorized Read. Close/discard, browser restart, extension reload and unverified background recreation clear access. Snapshots, approvals and actions are never restored or replayed.</p>
+        <p>Off removes this tab for all approved clients; Revoke removes one client; Pause all blocks page access until Resume, without restoring Write. Stop removes grants and sharing intents. These actions cannot recall delivered data. Preferences store connection mode, trusted-client hashes/membership and pause state; protected helper files retain credentials until explicit removal. Page payloads, snapshots, receipts and entered values are not persisted in preferences or diagnostics.</p>
+        <p>Tab discovery exposes only already-authorized tabs, opaque references and window/activity hints. Titles obey data exclusions and redaction; discovery returns no URLs or catalog of unshared tabs. Firefox separately requests optional website-content, browsing-activity and personal-communication transmission consent, plus website-activity consent for Write. Browser capture permissions remain independent; declining keeps ordinary exports available.</p>
         <p>The extension does not upload captured content, URLs, preferences, history or journal entries automatically, send them to the developer, sell data or use it for advertising. If you paste/upload an export elsewhere, that service’s policies apply.</p>
         <p>Help, project, contact and donation links open only when chosen, without capture data attached. Linked services, email and payment providers may receive normal navigation, contact or payment information under their policies.</p>
         <p>Support emails and GitHub issues contain information you provide and may be retained by recipients. Omit passwords, tokens and private page content. Contact the developer to request deletion of information sent directly; public GitHub content also follows GitHub’s controls and policies.</p>
@@ -138,12 +140,13 @@ SPDX-License-Identifier: GPL-3.0-only
       <section aria-labelledby="permissions">
         <h2 id="permissions">Permissions</h2>
         <ul>
-          <li><strong>Chrome debugger:</strong> temporarily reads the active page and eligible frames after an export or authorized MCP request, checks frame visibility/password input types, and performs explicitly approved MCP interactions before detaching.</li>
+          <li><strong>Chrome debugger:</strong> temporarily reads the active page and eligible frames after an export or authorized MCP request, checks frame visibility/password input types, and performs explicitly approved MCP interactions before detaching. MCP also resolves selected/shared-tab metadata through this existing API without attaching; other targets are not exposed to clients.</li>
           <li><strong>activeTab and scripting:</strong> provide temporary page access and the on-demand Desktop element picker. Firefox also uses them for page/frame capture and approved MCP interactions through fixed isolated-world operations.</li>
           <li><strong>Firefox optional site access:</strong> Include frames from other sites is off by default. Enabling requests access to all HTTP/HTTPS sites. Access persists across tabs/restarts; switching off revokes it, including earlier individual grants. Ordinary capture requires Copy, Preview or Desktop Save; MCP capture requires a separately authorized connection. Protected frames may remain unavailable.</li>
           <li><strong>clipboardWrite:</strong> copies your requested export.</li>
           <li><strong>downloads:</strong> saves requested files on Desktop. Firefox asks for this optional permission on Save; Android never requests it.</li>
           <li><strong>nativeMessaging (optional):</strong> connects to the local helper only after MCP enablement and permission consent.</li>
+          <li><strong>alarms:</strong> schedules bounded MCP retries and access expiry without capturing pages.</li>
           <li><strong>storage:</strong> saves preferences and filter settings locally.</li>
         </ul>
       </section>
@@ -161,7 +164,7 @@ SPDX-License-Identifier: GPL-3.0-only
       <section aria-labelledby="contact">
         <h2 id="contact">Changes and contact</h2>
         <p>Data-handling changes will be reflected here with an updated date. This policy is included in the extension and project repository.</p>
-        <p>Privacy questions: <a href="mailto:copyascontext@gmail.com">copyascontext@gmail.com</a> or the <a href="https://github.com/V-Shkrobatskyi/Copy-as-Context">project repository</a>. Do not share sensitive exports in public issues.</p>
+        <p>Privacy questions: <a href="mailto:copyascontext@gmail.com">copyascontext@gmail.com</a> or the <a href="https://github.com/V-Shkrobatskyi/Page-as-Context">project repository</a>. Do not share sensitive exports in public issues.</p>
       </section>
     </main>
   </div>

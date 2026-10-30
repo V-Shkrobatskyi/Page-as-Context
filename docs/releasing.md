@@ -99,7 +99,7 @@ public content without personal account details.
 
 The privacy policy is [PRIVACY.md](../PRIVACY.md), included offline as
 `privacy.html`. Its public URL is
-`https://github.com/V-Shkrobatskyi/Copy-as-Context/blob/main/PRIVACY.md`.
+`https://github.com/V-Shkrobatskyi/Page-as-Context/blob/main/PRIVACY.md`.
 Verify anonymous access to privacy and support links before submission.
 Describe local page processing accurately when completing data-handling forms;
 see the [Chrome privacy guidance](https://developer.chrome.com/docs/webstore/program-policies/user-data-faq)

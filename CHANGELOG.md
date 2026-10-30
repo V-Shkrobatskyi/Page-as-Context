@@ -1,5 +1,42 @@
 # Changelog
 
+## 2.1.0 — unreleased
+
+- Resolve shared-tab metadata with Chrome's existing debugger API after activeTab access ends, without requesting extra tabs/host permissions or exposing unshared targets.
+
+- Preserve Automatic tab access when browser URL state arrives before navigation events; invalidate old document grants without clearing the selected mode or renewing expiry.
+
+- Label Shared tabs columns and add per-client Skip prompts controls for live Write connections, synchronized with action approval and limited by organization policy.
+
+- Add Allow for this connection to action approval prompts, scoped to the current client/tab grant without changing global settings and subject to organization policy.
+
+- Show the original Connect MCP button while MCP is disabled; open the top of MCP settings without selecting or capturing a tab.
+
+- Show a local auto-disconnect countdown in a separate Shared tabs column, including Unlimited, without polling MCP.
+
+- Open action approval actively in the source browser window and focus it; distinguish approval-timeout and approval-unavailable from an explicit denial.
+
+- Add Automatic tab auto-disconnect with minutes/hours/days/unlimited, defaulting to one hour of inactivity; renew only after successful reads and applied actions while respecting organization session caps. Shorten and index the MCP user guide.
+
+- Show per-tab yellow R / red W badges over the full-size original toolbar icon, keep colored arrows in the popup, and restore MCP indicators after shortcut feedback.
+
+- Brighten Read/Write arrow colors and improve the compact AI switch with matching button text size, hover feedback and edge separators.
+
+- Replace the Automatic AI dropdown with previous/next arrows and a compact AI Off / Read / Write label; cycle in both directions while skipping unavailable Write access.
+
+- In Automatic, select Read before clients connect and give paired clients access without a separate opt-in; open an active MCP pairing tab for new requests, with no approval controls hidden in the popup. Manual connections are unchanged.
+
+- Use Mode (Read only / Read and write) for both Automatic and Manual MCP connections; remove the redundant Allow page actions checkbox.
+
+- Restore the Connect MCP link icon and show visible, specific feedback when a browser-internal page cannot be shared.
+
+- Add Automatic MCP connections, bounded recovery and Pause/Resume while retaining Manual mode for existing users.
+- Replace Connect MCP in Automatic mode with a compact AI: Off / Read / Write menu and per-tab arrow colors with tooltips.
+- Share multiple tabs with explicitly paired trusted clients; discover authorized connection IDs and active tabs through MCP tools.
+- Keep Automatic Read/Write attached to the selected tab across reloads and site changes without renewing expiry; new tabs start Off. Invalidate old document grants and snapshots on navigation; transport recovery still downgrades Write to Read.
+- Use one Claude integration/version for Desktop and Code, with shared sources and client-specific installation manifests and credentials; update ChatGPT.
+
+
 ## 2.0.1 — unreleased
 
 - Show the applied access mode on the MCP tab connection button without a separate write checkbox.

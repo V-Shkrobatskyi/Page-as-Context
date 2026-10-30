@@ -1,6 +1,6 @@
 # Privacy policy for Page as Context
 
-Last updated: 2026-10-28. Applies to version 2.0.1.
+Last updated: 2026-10-29. Applies to version 2.1.0.
 
 ## Purpose and local processing
 
@@ -37,27 +37,47 @@ You can change saved preferences in the popup or remove extension-local preferen
 
 ## Optional MCP integration
 
-MCP is disabled by default. Enabling it, approving a local client and connecting
-one tab allows that client to request filtered page context until access expires
-or is revoked. The separately installed helper uses private local IPC and Native
-Messaging. The AI client may forward the context to its model provider. A local
-connection does not imply a local model. Previously delivered data cannot be
-recalled.
+MCP is disabled by default. New installations default to Automatic connection;
+existing installations remain Manual until you choose Automatic. Choose
+**AI Off / Read / Write** in the source tab popup. Read can be selected before
+a client connects. In Automatic, one-time pairing code comparison and approval
+authorize each client for all tabs marked Read or Write, without another
+shared-access opt-in. Write includes reading and supported actions, with browser
+approval before each action by default. Clients keep independent credentials.
 
-Read and write additionally requires an explicit browser-side grant. Actions use
-short-lived references and browser approval by default. Native-control click,
-fill, selection and checkbox operations can submit data or cause irreversible
-site changes. Entered values are not saved in approval history or diagnostics.
-Post-action context is subject to the same filters and data controls as reads.
-Transient references, operation receipts and page payloads are not persisted.
-Pairing stores credential hashes in extension-local storage; the helper keeps
-credentials in protected local files. Stop/revoke clears live grants and refs;
-restarts never restore them. The helper retains credential files on uninstall
-for explicit user removal. The extension has no developer-hosted MCP backend.
+The local helper uses private IPC and Native Messaging. The AI client may send
+returned context to its model provider; already delivered data cannot be recalled.
+Automatic access defaults to one hour of inactivity for Read and Write. Successful
+reads and applied actions renew only that tab's timer; discovery and status checks
+do not. Users can choose minutes, hours, days or unlimited. Organization session
+caps still apply. Automatic reconnect restores only still-authorized Read within
+the current expiry. Automatic Read and Write stay with the tab across reloads
+and site changes, including private sites, subject to privacy filters and source
+policies. Navigation does not renew expiry; new tabs start Off. Close/discard,
+browser restart and extension reload remove access. Snapshots and pending actions never survive navigation/recovery.
+Background worker recreation also clears shares if document identity cannot be
+proven. The user must share again; matching URLs never restore access.
 
-Firefox separately requests optional consent for website content, browsing
-activity and personal communications sent to the helper, plus website activity in write mode. Declining or revoking
-these permissions blocks MCP transmission while ordinary export remains usable.
+Off removes this tab for all approved clients. Revoke removes only one client;
+Pause all blocks page access until explicit Resume, which never restores Write.
+Stop clears live grants and sharing intents. Local preferences store connection
+mode, trusted-client hashes/membership and pause state. Page content, snapshots,
+operation receipts and entered values are not persisted in preferences or
+diagnostics. The helper stores credentials in protected local files, retained
+on uninstall until explicit removal. No developer-hosted MCP backend is used.
+
+Actions can submit data or cause irreversible changes. Post-action captures use
+the same privacy filters and data controls. Shared-tab discovery exposes only
+already-authorized tabs, current connection references and window/activity hints;
+titles obey title exclusions and redaction. It does not expose a catalog of all
+open tabs or automatically grant access when focus changes. No raw URLs are
+returned by tab discovery.
+
+Firefox requests optional consent for website content, browsing activity and
+personal communications sent to the helper, plus website activity for Write.
+Declining or revoking consent blocks the corresponding MCP access while ordinary
+export remains available. Browser capture permissions remain separate from an
+MCP grant; some frames or pages can remain unavailable.
 
 ## Sharing and external services
 
@@ -69,12 +89,13 @@ If you email a bug report or post a GitHub issue, the recipient/service receives
 
 ## Permissions
 
-- Chrome debugger: briefly reads the active page and eligible embedded documents after an export action or authorized MCP request, checks frame visibility and password input types, and detaches afterward.
+- Chrome debugger: briefly reads the active page and eligible embedded documents after an export action or authorized MCP request, checks frame visibility and password input types, and detaches afterward. MCP also uses this existing API to resolve metadata for a selected/shared tab when activeTab access ends, without attaching; other targets are not exposed to MCP clients.
 - activeTab and scripting: obtain temporary page access and install the Desktop element picker on demand in both browsers. Firefox also uses these permissions to capture the current page and permitted embedded documents.
 - Firefox optional site access: Include frames from other sites is off by default. Enabling it requests access to all HTTP/HTTPS websites in one browser prompt. The permission persists across tabs and browser restarts; turning the option off removes site access, including earlier individual host grants. Ordinary capture follows an explicit Copy, Preview or Desktop Save action; authorized MCP reads follow the separately granted connection. Protected frames may remain unavailable.
 - clipboardWrite: writes the export you request to your clipboard.
 - downloads (Desktop only): saves the export you request as a local file. In Firefox, this permission is optional and requested when you click Save; Android never requests it.
 - nativeMessaging (optional): connects only to the separately installed local helper after explicit MCP enablement and consent.
+- alarms: schedules bounded MCP reconnect attempts and access expiry without capturing pages.
 - storage: persists export preferences and redaction filter settings locally.
 
 Persistent access to all HTTP/HTTPS websites is optional and requested only when you enable Include frames from other sites in Firefox.
@@ -93,4 +114,4 @@ Page as Context uses information obtained through browser permissions solely for
 
 Changes to data handling will be reflected in this policy with an updated date. The policy is included in the extension and maintained in the project repository.
 
-For privacy questions, contact [copyascontext@gmail.com](mailto:copyascontext@gmail.com) or visit the [project repository](https://github.com/V-Shkrobatskyi/Copy-as-Context). Avoid sharing sensitive exports in public issues.
+For privacy questions, contact [copyascontext@gmail.com](mailto:copyascontext@gmail.com) or visit the [project repository](https://github.com/V-Shkrobatskyi/Page-as-Context). Avoid sharing sensitive exports in public issues.

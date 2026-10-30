@@ -45,7 +45,7 @@ the full license is included at `public/icon/brands/LICENSE.txt`.
 Each release must provide an archive of its corresponding source, including
 the lockfile, assets, configuration, and scripts needed to build and modify it.
 Use the version's `vX.Y.Z` tag and source archive in
-[GitHub Releases](https://github.com/V-Shkrobatskyi/Copy-as-Context/releases).
+[GitHub Releases](https://github.com/V-Shkrobatskyi/Page-as-Context/releases).
 [BUILDING.md](BUILDING.md) documents the build procedure.
 
 The bundled License page links to the release and source tag for the installed

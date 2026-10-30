@@ -20,17 +20,18 @@ export default defineBackground(() => {
     picker ??= createPickerCoordinator();
     return picker.start(preferences, target);
   };
-  installKeyboardShortcuts(journal, startPicker);
-  let mcp: ReturnType<typeof createMcpController> | undefined;
+  const mcp = createMcpController();
+  installKeyboardShortcuts(journal, startPicker, mcp.refreshAction);
+  void mcp.initialize().catch(() => {});
+  browser.runtime.onStartup?.addListener(() => { void mcp.initialize().catch(() => {}); });
 
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message && typeof message === 'object' && message.type === 'mcp-ui-v1') {
       if (sender.id !== browser.runtime.id || !sender.url ||
         ![browser.runtime.getURL('/popup.html'), browser.runtime.getURL('/mcp.html'), browser.runtime.getURL('/mcp-approval.html')].includes(sender.url.split('#')[0]!)) return;
-      mcp ??= createMcpController();
       const reply = (value: unknown) => { try { sendResponse(value); } catch { /* The settings page or popup may have closed. */ } };
       void mcp.ui(message, sender).then(reply, (error: unknown) => {
-        const code = error instanceof Error && ['invalid-source', 'invalid-sender', 'invalid-route', 'not-connected', 'source-required', 'permission-required', 'page-changed', 'invalid-instance', 'invalid-clients'].includes(error.message) ? error.message : 'request-unavailable';
+        const code = error instanceof Error && ['unsupported-page', 'invalid-source', 'invalid-sender', 'invalid-route', 'not-connected', 'source-required', 'permission-required', 'page-changed', 'invalid-instance', 'invalid-clients', 'no-shared-clients', 'read-only'].includes(error.message) ? error.message : 'request-unavailable';
         reply({ ok: false, code, error: error instanceof PolicyError ? error.message : 'MCP request unavailable. Check permissions, policies and the connected source, then reload.' });
       });
       return true;

@@ -102,3 +102,23 @@ button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visibl
 
 .settings-panel { border-color: light-dark(var(--accent), var(--border)); }
 .primary-action { color: light-dark(#fff, #1b1b23); box-shadow: 0 1px 2px light-dark(#263e8929, transparent); }
+
+/* Compact per-tab AI access uses the existing action row width. */
+.actions > .ai-control { grid-column: span 2; display: grid; grid-template-columns: 24px minmax(0, 1fr) 24px; align-items: stretch; min-width: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--accent-dark); }
+@media (max-width: 340px) {
+  .actions > .ai-control { grid-template-columns: 20px minmax(0, 1fr) 20px; }
+}
+.ai-control[hidden], .ai-details[hidden], #mcp-connect[hidden] { display: none; }
+.ai-control > button { min-width: 0; padding: 9px 0; border: 0; border-radius: 7px; background: transparent; color: inherit; font-size: .85rem; }
+#ai-prev { border-right: 1px solid var(--border); border-radius: 7px 0 0 7px; }
+#ai-next { border-left: 1px solid var(--border); border-radius: 0 7px 7px 0; }
+.ai-control > button:active:not(:disabled) { background: var(--selected); }
+@media (hover: hover) and (pointer: fine) {
+  .ai-control > button:hover:not(:disabled) { background: var(--selected); }
+}
+.ai-control > button:disabled { opacity: .35; cursor: default; }
+#ai-menu { position: relative; display: flex; align-items: center; justify-content: center; white-space: nowrap; font-size: .7rem; font-weight: 700; }
+.ai-control.has-pairing #ai-menu::after { content: ""; position: absolute; top: 3px; right: 0; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.ai-details { margin-bottom: 10px; padding: 8px; font-size: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+.ai-details button { margin: 3px; border: 1px solid var(--border); background: var(--background); color: var(--accent-dark); padding: 7px 8px; font-size: .72rem; }
+.ai-details p { margin: 4px 0; overflow-wrap: anywhere; }

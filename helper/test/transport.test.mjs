@@ -198,3 +198,25 @@ test('installed executable starts the broker automatically with spaces and quote
   assert.ok((await readFile(join(directory, 'native-host.mjs'), 'utf8')).startsWith('#!/bin/sh\nexec '));
   assert.deepEqual(await readFile(join(directory, 'runtime/node')), await readFile(process.execPath));
 });
+
+test('shared-tab discovery uses the authenticated bridge and validates selectors without granting access', async t => {
+  const config = await fixture(t);
+  const received = [];
+  await endpoint(t, config, instanceId, { answer(message, socket) {
+    received.push(message.request);
+    const result = message.request.tool === 'list-tools' ? { tools: [] } : { tabs: [{ connectionId: 'synthetic_connection_001', mode: 'read-only' }] };
+    for (const chunk of resultChunks(message.id, result)) writeFrame(socket, chunk);
+  } });
+  const path = join(config.directory, 'client.json'); await createPrivateJson(path, credential());
+  const client = new Client({ name: 'discovery-check', version: '1' }); t.after(() => client.close());
+  await client.connect(new StdioClientTransport({ command: process.execPath, args: [new URL('../src/cli.mjs', import.meta.url).pathname, 'stdio', '--directory', config.directory, '--credential', path], stderr: 'pipe' }));
+  const names = (await client.listTools()).tools.map(tool => tool.name);
+  assert.ok(names.includes('list_shared_tabs')); assert.ok(names.includes('resolve_shared_tab'));
+  const result = await client.callTool({ name: 'resolve_shared_tab', arguments: { selector: 'last-focused' } });
+  assert.equal(JSON.parse(result.content[0].text).tabs[0].connectionId, 'synthetic_connection_001');
+  const count = received.length;
+  await assert.rejects(client.callTool({ name: 'list_shared_tabs', arguments: { tabId: 7 } }));
+  await assert.rejects(client.callTool({ name: 'resolve_shared_tab', arguments: { selector: 'only', tabRef: randomUUID() } }));
+  assert.equal(received.length, count);
+  assert.deepEqual(received.at(-1), { tool: 'resolve_shared_tab', arguments: { selector: 'last-focused' } });
+});

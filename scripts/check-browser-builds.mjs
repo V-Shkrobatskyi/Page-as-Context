@@ -50,7 +50,7 @@ for (const target of ['chrome', 'firefox']) {
     assert.ok(links.includes('LICENSE'), 'License page does not link to the bundled license');
     assert.ok(links.includes('THIRD_PARTY_NOTICES.txt'), 'License page does not link to third-party notices');
     for (const path of ['releases/tag', 'tree']) {
-      assert.ok(links.includes(`https://github.com/V-Shkrobatskyi/Copy-as-Context/${path}/v${pkg.version}`), 'License page links to the wrong source version');
+      assert.ok(links.includes(`https://github.com/V-Shkrobatskyi/Page-as-Context/${path}/v${pkg.version}`), 'License page links to the wrong source version');
     }
   } finally { licenseDocument.window.close(); }
   assert.ok((await readFile(new URL(manifest.action.default_popup, directory), 'utf8')).length > 0);
@@ -91,7 +91,7 @@ for (const target of ['chrome', 'firefox']) {
   assert.ok(!/\bimport\s*\(/u.test(await readFile(new URL('background.js', directory), 'utf8')), 'Background requires runtime dynamic imports');
   if (firefox) {
     assert.equal(manifest.minimum_chrome_version, undefined);
-    assert.deepEqual([...manifest.permissions].sort(), ['activeTab', 'scripting', 'clipboardWrite', 'storage'].sort());
+    assert.deepEqual([...manifest.permissions].sort(), ['activeTab', 'scripting', 'clipboardWrite', 'storage', 'alarms'].sort());
     assert.deepEqual(manifest.optional_permissions, ['downloads', 'nativeMessaging']);
     assert.deepEqual(manifest.optional_host_permissions, ['http://*/*', 'https://*/*']);
     assert.ok((await readFile(new URL('frame-capture.js', directory), 'utf8')).includes('__pageAsContextFrames'), 'Missing isolated frame helper');
@@ -125,7 +125,8 @@ for (const target of ['chrome', 'firefox']) {
     assert.ok(!source.includes('Include frames from other sites'), 'Chrome includes Firefox site access UI');
     assert.ok(!source.includes('Other-site frames enabled'), 'Chrome includes Firefox permission controller');
     assert.equal(manifest.minimum_chrome_version, '125');
-    assert.deepEqual([...manifest.permissions].sort(), ['debugger', 'activeTab', 'scripting', 'clipboardWrite', 'downloads', 'storage'].sort());
+    assert.deepEqual([...manifest.permissions].sort(), ['debugger', 'activeTab', 'scripting', 'clipboardWrite', 'downloads', 'storage', 'alarms'].sort());
+    assert.deepEqual(manifest.optional_permissions, ['nativeMessaging']);
     assert.ok(manifest.background.service_worker);
     assert.equal(manifest.browser_specific_settings, undefined);
     assert.ok(source.includes('Accessibility.getFullAXTree'), 'Chrome AX capture was removed');

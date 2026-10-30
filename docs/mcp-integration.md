@@ -1,31 +1,92 @@
 # MCP integration
 
-Page as Context can share filtered context from one explicitly connected tab
-with an external MCP client. MCP starts disabled. The implementation supports **Read only** and **Read and write**. Write access
-is granted by **Connect selected tab (read and write)** in **Approved clients**
-after applying that mode. In **Read only**, the button grants reading only.
-Unsaved mode changes do not affect the connection. Every action opens
-an extension-owned approval page by default; closing or denying it prevents the
-action. **Allow for this connection** lets the user approve supported actions for
-one explicitly connected tab until navigation, expiry or disconnection. It is
-available unless organization policy requires approval before each action. The
-default remains **Ask before each action**; the AI client may also request its
-own confirmations.
+Page as Context shares explicitly permitted tabs through a local MCP bridge.
+MCP starts disabled. New installations select **Automatic** connection; existing
+settings stay **Manual** until you switch. The compact popup switch shows
+**AI Off**, **AI Read** or **AI Write**. Write includes reading and supported
+page actions. The toolbar keeps the full-size original icon with a yellow R
+badge for Read or red W badge for Write; Off has no badge. The popup arrow remains
+white, yellow or red. The toolbar tooltip explains the state. Temporary keyboard
+shortcut feedback restores the current MCP indicator when it ends.
 
-Applying MCP settings invalidates active tab grants, snapshots and pending
-actions. If the helper was running, the extension attempts to reconnect it once
-using existing permissions and the newly applied settings. It never restores
-tab access or repeats an action. If MCP is disabled, policy blocks access,
-permissions are missing or that attempt fails, it stays disconnected. Use
-**Start helper connection** to retry manually and approve any required permissions.
-**Stop all MCP access** cancels a pending reconnection. Managed policy changes
-do not trigger an automatic connection.
+**Mode** applies to both connection types: **Read only** permits reading;
+**Read and write** also enables explicit Write grants. New settings default to
+Read only. Select Read and write before choosing Write in the popup; per-action
+approval remains independent. Connection controls only Automatic versus Manual
+bridge startup. The former Allow page actions checkbox has been removed; saved
+restrictions migrate without expanding permissions.
+
+In Automatic, choose Read in a source tab popup even before a client connects.
+The selected access and arrow color remain visible while waiting for a client.
+Each new client must complete one-time code comparison and approval in MCP
+settings. Automatic opens the Pairing and clients section in an active browser
+tab for a new request, reusing its pairing tab for later requests. Repeated
+polling of the same request does not open more tabs. The popup only shows a
+pending indicator; use its MCP footer link to reopen settings if needed. Approval gives that client
+access to all tabs marked Read or Write; there is no separate shared-access
+checkbox. Previously approved clients also participate automatically. Unknown
+clients cannot discover or read tabs. Revoke removes one client's access; Off
+removes every client's access to that tab. Ask before each action remains the
+default, and adding a client never inherits another client's session approval.
+Automatic connects the helper without Start; Retry is available in MCP settings.
+Manual retains Start helper connection and per-client Connect selected tab.
+
+### Automatic inactivity timeout
+
+In Access and approval, **Auto-disconnect tabs** appears whenever Connection is
+Automatic, independently of Mode or Enable MCP. Its default is **1 hour** for
+both Read and Write. Choose 1–999 minutes, hours or days, or **unlimited** (the
+amount field is disabled). Existing Automatic settings without this option
+also use one hour. Apply settings before granting tab access again. The Shared
+tabs table shows each tab's remaining time in a separate column: minutes,
+seconds in the final minute, or Unlimited. This countdown runs locally without
+MCP polling and updates when successful activity changes the deadline.
+
+A successful `read_page_context` or an actually applied action restarts the
+inactivity timer for that tab and its current client grants. Discovery, status
+checks, pairing, failed/denied actions and cached action receipts do not renew
+access. Activity on another tab does not extend it. Off and Revoke cannot be
+undone by a late response. Manual retains its existing fixed session duration.
+
+Unlimited removes only the inactivity timeout. Explicit Off, tab close/discard,
+browser/extension restart and Stop still clear access;
+transport recovery still downgrades Write. A managed `McpMaxSessionMinutes` remains
+an absolute session cap, including for unlimited, and is never extended by
+activity. Discovery and connection status return `expiresAt: null` when there
+is no expiry. Pairing trust persists independently of tab access.
+
+The assistant calls `list_shared_tabs` or `resolve_shared_tab` to obtain current
+connection IDs; you do not copy IDs into chat. Only authorized tabs are returned.
+Selectors include `only`, `last-focused` and `active-per-window`. An unshared
+active tab produces `tab-not-shared`; focus does not authorize another tab.
+Discovery respects title exclusions/redaction and returns no raw URLs.
+
+Automatic Read and Write follow the shared tab across reloads and navigation,
+including different sites, without renewing the inactivity timer. A new tab starts
+Off, including tabs opened from a shared tab. Navigating to a private site in the
+same tab keeps its selected access, subject to privacy filters and source policies.
+Document grants, snapshots and pending approvals are invalidated on navigation;
+clients discover fresh connection IDs and read a fresh snapshot before acting.
+Close/discard, browser restart and extension reload clear access. Short transport recovery can restore only validated Read, with fresh IDs
+and snapshots. Unverified background recreation clears shares. Pause all blocks
+page access until Resume, which never restores Write. Off affects this tab for
+all approved clients; Revoke affects only one client. Stop clears all sharing and
+cancels retries. Privacy/policy changes invalidate previous access. No action is
+automatically replayed, including actions with an unknown outcome.
+
+When Chrome hides tab metadata after cross-site navigation, MCP resolves the
+selected tab through the existing debugger API without attaching. No extra
+`tabs` or host permission is requested. Other targets are not exposed to clients;
+unavailable metadata blocks execution without clearing the sharing intent.
+
+Browser permissions remain separate. Firefox may require fresh user-granted
+site access after navigation even while an MCP sharing intent remains active.
 
 For packaged ChatGPT desktop setup on macOS Apple silicon, install the **Page as
 Context** plugin and ask it to set up your browser in chat. Review the prepared
 plan, approve the local setup, then compare the pairing code with the request in
 the extension. See [the package guide](../integrations/chatgpt/PACKAGE-README.md).
-The manual commands below remain available for development and recovery.
+Claude Code uses the [shared Claude integration](../integrations/claude/PACKAGE-README.md); Claude Desktop retains its MCPB. The manual commands below remain available for development and recovery.
 
 The connection is local, but your AI client may send the returned context to its
 model provider. Page text is untrusted data. Filters cannot identify every
@@ -104,7 +165,7 @@ wildcards are accepted. For a non-default Chrome user data directory, pass
    or rejection is printed explicitly. An existing credential for another browser
    or instance is rejected without being overwritten.
 7. Choose **Connect selected tab** for the approved client. Give the assistant
-   the displayed `connectionId`; this is an opaque session reference, not a
+   a `connectionId` obtained by `list_shared_tabs`; this is an opaque session reference, not a
    credential. Each client grant addresses one tab. A different active tab does
    not change that target.
 
@@ -157,9 +218,9 @@ access. Use the full Page as Context plugin for in-chat setup and acceptance.
 
 ## Read, interact, test and revoke
 
-The tools are `get_connection_status(connectionId)` and
+The discovery tools are `list_shared_tabs()` and `resolve_shared_tab({selector|tabRef})`; neither grants access. Page tools include `get_connection_status(connectionId)` and
 `read_page_context(connectionId)`. They return only this authorized connection.
-There is no all-tabs tool, arbitrary URL navigation, JavaScript evaluation,
+There is no unshared/all-tabs catalog, arbitrary URL navigation, JavaScript evaluation,
 screenshot, cookies, storage, file or shell tool. Results use one canonical text
 envelope, without a duplicate `structuredContent` copy. In a write-authorized connection, `click_element`, `fill_element`,
 `select_option` and `set_checked` are available. Each accepts the connection,
@@ -192,6 +253,21 @@ before the browser connects or a tab grant exists. A listed tool is not permissi
 to use it: each invocation still requires the browser's current policy, client
 approval, tab grant and, for actions, write access and any required confirmation.
 This avoids missing action tools in clients that cache their initial catalog.
+Per-action approval opens an active tab in the source browser window and requests
+that window to come forward. A prompt expires after 45 seconds.
+**Allow this action** approves only the requested operation. The separate
+**Allow for this connection** button approves it and skips further prompts for
+that exact client/tab grant, without changing the saved Write approval setting.
+Navigation, expiry or revocation ends this approval. Other clients and tabs do
+not inherit it. The button is hidden when organization policy requires each-action
+approval, and the background independently enforces that restriction.
+For Automatic tabs, **Shared tabs → Skip prompts** shows a checkbox for each connected
+client. Toggle it to change only that live connection; Read and managed
+each-action connections cannot enable it. It reflects approval granted from the
+action prompt, does not change global settings or renew the timer, and does not
+approve a request that is already waiting for a decision. Receipts distinguish
+`approval-denied`, `approval-timeout` and `approval-unavailable`; none authorizes
+the action, and denied or uncertain operations must not be replayed automatically.
 Disconnecting the last session with the same browser, instance, client ID and
 secret revokes that client's live grants. Closing one of several matching
 sessions preserves the others. Reconnecting after the last session closes
@@ -206,8 +282,8 @@ separately governed by clipboard and file-export policies.
 
 Navigation, tab closure/discard, permission revocation, settings or policy changes
 invalidate access. This implementation conservatively disconnects tab grants
-on all navigation, including same-origin changes. Reconnect through the popup.
-Browser/background/helper restarts never restore tab grants. **Stop** closes the
+on all navigation in Manual mode. Automatic keeps the tab's selected mode across navigation as described above. Reconnect through the popup after access ends.
+Browser/extension/background recreation clears tab grants. Short helper transport recovery can restore only validated Read in Automatic. **Stop** closes the
 native port and clears live access. **Revoke** removes only the selected client's
 approval, grants, snapshots and pending actions; it leaves the helper and other
 clients connected. Revoking while the helper is stopped does not start it.

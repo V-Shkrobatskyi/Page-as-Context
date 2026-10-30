@@ -20,16 +20,15 @@ This package is not listed in the public plugin directory.
    them before the assistant calls `confirm_browser_setup`. Keep the client's
    confirmation prompt enabled for this tool. Adding a second browser may
    restart the shared bridge and end existing tab connections.
-5. Click **Start helper connection** in the extension. Ask the assistant to check
-   pairing progress. Compare the code it returns with **Pairing and clients →
-   Pairing requests** in the extension and approve there. **Refresh status** is
-   a fallback if the request has not appeared. Previously approved profiles
-   may report approval immediately. Pairing does not share a tab.
-6. Open the source tab, choose **Connect MCP** in the popup, then connect
-   the selected tab for this client. The button shows the applied mode: **read
-   only** or **read and write**. To allow actions, apply **Read and write** and
-   choose **Connect selected tab (read and write)**. Give the assistant the displayed **Connection**
-   ID. Use this plugin's `browser-chrome` or `browser-firefox` tools.
+5. Automatic mode connects the bridge. Use **Retry connection** if setup is still
+   pending; only Manual mode needs **Start helper connection**. Compare the code
+   from `get_pairing_status` with the browser pairing request and approve yourself.
+   In Automatic, approval includes this app in access to tabs marked Read or Write.
+6. On a source tab use the arrows beside **AI Off** to select **Read** or **Write**. Write includes
+   reading and supported actions; approvals remain enabled by default. The assistant
+   uses `list_shared_tabs` or `resolve_shared_tab` for connection IDs. Manual mode
+   retains **Connect MCP → Connect selected tab**; discovery also works there.
+
 
 Setup runs through the plugin; there is no separate setup application. The
 package contains its Node runtime, production dependencies and license notices.

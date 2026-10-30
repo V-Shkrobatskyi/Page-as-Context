@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "browser-chrome": {
+      "type": "stdio",
+      "command": "${CLAUDE_PLUGIN_ROOT}/runtime/node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/server.mjs",
+        "chrome",
+        "--client",
+        "code"
+      ],
+      "cwd": "${CLAUDE_PLUGIN_ROOT}"
+    },
+    "browser-firefox": {
+      "type": "stdio",
+      "command": "${CLAUDE_PLUGIN_ROOT}/runtime/node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/server.mjs",
+        "firefox",
+        "--client",
+        "code"
+      ],
+      "cwd": "${CLAUDE_PLUGIN_ROOT}"
+    }
+  }
+}
