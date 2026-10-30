@@ -52,9 +52,11 @@ interface PopupHarness {
   saveLabel: FakeElement;
   preview: FakeElement;
   selectElement: FakeElement;
+  mcpConnect: FakeElement;
   customize: FakeElement;
   guideLink: FakeElement;
   diagnosticsLink: FakeElement;
+  mcpLink: FakeElement;
   licenseLink: FakeElement;
   shortcutsLink: FakeElement;
   status: FakeElement;
@@ -106,6 +108,7 @@ async function loadPopup(response: CaptureResult | unknown, options?: {
   const saveLabel = new FakeElement();
   const preview = new FakeElement();
   const selectElement = new FakeElement();
+  const mcpConnect = new FakeElement();
   const customize = new FakeElement();
   const status = new FakeElement();
   const metrics = new FakeElement();
@@ -114,6 +117,7 @@ async function loadPopup(response: CaptureResult | unknown, options?: {
   const feedback = new FakeElement();
   const guideLink = new FakeElement();
   const diagnosticsLink = new FakeElement();
+  const mcpLink = new FakeElement();
   const licenseLink = new FakeElement();
   const shortcutsLink = new FakeElement();
   const redactSensitiveData = new FakeElement();
@@ -128,8 +132,8 @@ async function loadPopup(response: CaptureResult | unknown, options?: {
   const elements = new Map<string, FakeElement>([
     ['#shortcuts-link', shortcutsLink], ['#app', app], ['#compression', compression], ['#format', format],
     ['#format-semantic-text', semanticTextFormat], ['#format-markdown', markdownFormat],
-    ['#customize', customize], ['#preview', preview], ['#select-element', selectElement], ['.primary-action', copy], ['.secondary-action', save], ['.status', status], ['.metrics', metrics],
-    ['#save-label', saveLabel], ['.feedback', feedback], ['#guide-link', guideLink], ['#diagnostics-link', diagnosticsLink], ['#license-link', licenseLink],
+    ['#mcp-connect', mcpConnect], ['#customize', customize], ['#preview', preview], ['#select-element', selectElement], ['.primary-action', copy], ['.secondary-action', save], ['.status', status], ['.metrics', metrics],
+    ['#save-label', saveLabel], ['.feedback', feedback], ['#guide-link', guideLink], ['#diagnostics-link', diagnosticsLink], ['#mcp-link', mcpLink], ['#license-link', licenseLink],
     ['#redact-sensitive-data', redactSensitiveData], ['#save-settings', saveSettings], ['#options-summary', optionsSummary],
     ['#include-other-site-frames', otherSiteFrames],
   ]);
@@ -208,7 +212,7 @@ async function loadPopup(response: CaptureResult | unknown, options?: {
   await settle();
   return {
     app, compression, format, markdown: markdownFormat, redactSensitiveData, saveSettings, optionsSummary, otherSiteFrames,
-    copy, save, saveLabel, preview, selectElement, customize, guideLink, diagnosticsLink, licenseLink, shortcutsLink, status, metrics, feedback, clipboardWrite, download, downloadSearch, downloadChanged, storageSet, sendMessage, requestPermission, createTab: extensionApi.tabs.create, managedGet, changePolicy: () => { for (const fn of policyListeners) fn({}, 'managed'); },
+    copy, save, saveLabel, preview, selectElement, mcpConnect, customize, guideLink, diagnosticsLink, mcpLink, licenseLink, shortcutsLink, status, metrics, feedback, clipboardWrite, download, downloadSearch, downloadChanged, storageSet, sendMessage, requestPermission, createTab: extensionApi.tabs.create, managedGet, changePolicy: () => { for (const fn of policyListeners) fn({}, 'managed'); },
   };
 }
 
@@ -253,7 +257,7 @@ describe('popup export flow', () => {
     expect(popup.clipboardWrite).not.toHaveBeenCalled();
   });
 
-  for (const [link, path] of [['guideLink', '/guide.html'], ['diagnosticsLink', '/data-controls.html'], ['licenseLink', '/license.html']] as const) {
+  for (const [link, path] of [['guideLink', '/guide.html'], ['diagnosticsLink', '/data-controls.html'], ['mcpLink', '/mcp.html'], ['licenseLink', '/license.html']] as const) {
     it.each([{ firefox: false }, { firefox: true }, { firefox: true, android: true }])(`opens ${path} once and closes only after the tab opens: %j`, async options => {
       const popup = await loadPopup(successfulCapture(), options);
       let opened!: (value: { id: number }) => void;
@@ -870,4 +874,29 @@ it('blocks Preview and Customize at their operation boundaries as well as disabl
   popup.preview.click(); popup.customize.click(); await settle();
   expect(popup.sendMessage).not.toHaveBeenCalled(); expect(popup.createTab).not.toHaveBeenCalled();
   expect(previewMock).not.toHaveBeenCalled();
+});
+
+
+it.each([false, true])('shows visible MCP feedback for a protected browser page (Firefox: %s)', async firefox => {
+  const popup = await loadPopup({ ok: false, code: 'unsupported-page' }, { firefox });
+  popup.feedback.hidden = true; popup.metrics.textContent = 'Previous capture metrics';
+  popup.mcpConnect.click(); await settle();
+  expect(popup.sendMessage).toHaveBeenCalledWith({ type: 'mcp-ui-v1', action: 'source' });
+  expect(popup.status.textContent).toBe('This browser page cannot be captured. Open a regular web page and try again.');
+  expect(popup.feedback.hidden).toBe(false); expect(popup.metrics.textContent).toBe('');
+  expect(popup.mcpConnect.disabled).toBe(false); expect(window.close).not.toHaveBeenCalled();
+  expect(popup.app.innerHTML).toMatch(/id="mcp-connect"[^>]*><svg class="button-icon"/u);
+});
+it('shows visible MCP feedback and allows retry after a message transport failure', async () => {
+  const popup = await loadPopup({ ok: false });
+  popup.feedback.hidden = true; popup.sendMessage.mockRejectedValueOnce(new Error('Private transport detail'));
+  popup.mcpConnect.click(); await settle();
+  expect(popup.status.textContent).toBe('Unable to open MCP settings.');
+  expect(popup.feedback.hidden).toBe(false); expect(popup.mcpConnect.disabled).toBe(false);
+});
+it('keeps other MCP source failures distinct from unsupported browser pages', async () => {
+  const popup = await loadPopup({ ok: false, code: 'invalid-source' });
+  popup.feedback.hidden = true; popup.mcpConnect.click(); await settle();
+  expect(popup.status.textContent).toBe('MCP is unavailable for this page or organization policy.');
+  expect(popup.feedback.hidden).toBe(false); expect(popup.mcpConnect.disabled).toBe(false);
 });

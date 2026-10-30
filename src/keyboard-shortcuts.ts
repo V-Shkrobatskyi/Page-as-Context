@@ -19,7 +19,7 @@ type StartPicker = (preferences: ExportPreferences, target?: Tab) => Promise<{ o
 const actions = { 'preview-context': 'preview', 'copy-page-context': 'copy', 'save-context-file': 'save', 'select-element': 'picker' } as const;
 
 /** Browser commands grant activeTab and keep capture independent of the popup lifetime. */
-export function installKeyboardShortcuts(journal: ReturnType<typeof installDiagnostics>, startPicker: StartPicker): void {
+export function installKeyboardShortcuts(journal: ReturnType<typeof installDiagnostics>, startPicker: StartPicker, restoreAction?: () => Promise<void>): void {
   let pending = false;
   const feedbackTimers = new Map<number, ReturnType<typeof setTimeout>>();
   async function feedback(tabId: number, message: string, success: boolean): Promise<void> {
@@ -27,6 +27,7 @@ export function installKeyboardShortcuts(journal: ReturnType<typeof installDiagn
     await Promise.allSettled([
       browser.action.setBadgeText({ tabId, text: success ? '✓' : '!' }),
       browser.action.setBadgeBackgroundColor({ tabId, color: success ? '#18794e' : '#b42318' }),
+      browser.action.setBadgeTextColor?.({ tabId, color: '#FFFFFF' }),
       browser.action.setTitle({ tabId, title: `Page as Context — ${message}` }),
     ]);
     feedbackTimers.set(tabId, setTimeout(() => {
@@ -34,7 +35,7 @@ export function installKeyboardShortcuts(journal: ReturnType<typeof installDiagn
       void Promise.allSettled([
         browser.action.setBadgeText({ tabId, text: '' }),
         browser.action.setTitle({ tabId, title: 'Page as Context' }),
-      ]);
+      ]).then(() => restoreAction?.()).catch(() => {});
     }, 8000));
   }
 

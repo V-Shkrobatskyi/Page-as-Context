@@ -102,3 +102,12 @@ describe('browser keyboard commands', () => {
     expect(mocks.api.action.setBadgeText).toHaveBeenCalledExactlyOnceWith({ tabId: 42, text: '!' });
   });
 });
+
+it('restores the current MCP toolbar state after temporary shortcut feedback', async () => {
+  const restore = vi.fn().mockResolvedValue(undefined);
+  installKeyboardShortcuts(journal as any, picker, restore);
+  command('copy-page-context', tab); await settle();
+  expect(restore).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(8000);
+  expect(restore).toHaveBeenCalledOnce();
+});
