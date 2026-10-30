@@ -86,7 +86,7 @@ export function browserSetup({ browser, directory, profileDirectory, clientName,
       .then(() => { if (!disposed) { current.status = 'approved'; delete current.code; } }, error => {
         current.status = controller.signal.aborted ? 'cancelled' : 'failed'; current.error = safeError(error); delete current.code;
       });
-    return { ...publicJob(), instructions: 'In the extension click Start helper connection. Call get_pairing_status to obtain the code. Compare it with Pairing requests in the extension, then approve there. Afterwards connect a tab separately.' };
+    return { ...publicJob(), instructions: 'Automatic mode connects the extension bridge after setup; use Retry connection if needed. In Manual mode click Start helper connection. Call get_pairing_status to obtain the code. Compare it with Pairing requests in the extension, then approve there. Afterwards choose AI: Read or Write in the popup on the source tab (Manual: connect it in settings). Use list_shared_tabs to discover current connection IDs.' };
   }
   const descriptors = [
     ['setup_status', 'Check local browser setup without installing, pairing or reading pages.', {}, []],

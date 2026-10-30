@@ -37,8 +37,13 @@ try {
   assert.deepEqual(manifest.server.mcp_config.args, ['${__dirname}/server.mjs', '${user_config.browser}']);
   assert.equal(manifest.user_config.browser.required, true);
   assert.equal(manifest.user_config.browser.default, undefined);
-  const topLevel = new Set(['manifest.json', 'server.mjs', 'README.md', 'LICENSE', 'PACKAGE.json', 'DEPENDENCIES.json', 'DEPENDENCY-LOCK.json', 'helper', 'runtime']);
+  const topLevel = new Set(['manifest.json', 'server.mjs', 'README.md', 'LICENSE', 'PACKAGE.json', 'DEPENDENCIES.json', 'DEPENDENCY-LOCK.json', 'helper', 'runtime', '.claude-plugin', '.mcp.json', 'plugin.json', 'skills']);
   for (const name of await readdir(installed)) assert.ok(topLevel.has(name), `Unexpected root entry: ${name}`);
+  const codeManifest = JSON.parse(await readFile(join(installed, '.claude-plugin/plugin.json'), 'utf8'));
+  const codeServers = JSON.parse(await readFile(join(installed, '.mcp.json'), 'utf8')).mcpServers;
+  assert.equal(codeManifest.name, manifest.name); assert.equal(codeManifest.version, manifest.version);
+  assert.deepEqual(await readdir(join(installed, '.claude-plugin')), ['plugin.json']);
+  for (const browser of ['chrome', 'firefox']) assert.deepEqual(codeServers[`browser-${browser}`].args.slice(-2), ['--client', 'code']);
   assert.deepEqual((await readdir(join(installed, 'runtime'))).sort(), ['LICENSE', 'node']);
   assert.ok((await lstat(join(installed, 'runtime/node'))).mode & 0o100, 'The archive must retain an executable runtime.');
   for (const name of Object.keys(index.files)) assert.ok(!/(?:^|\/)(?:\.env[^/]*|profiles|config\.json|setup-service\.mjs|[^/]+\.swift)$|\.app\//u.test(name), 'Exclude local data and the removed setup app.');
@@ -71,11 +76,11 @@ try {
       assert.equal(client.getServerVersion().version, manifest.version);
       assert.match(client.getInstructions(), new RegExp(`configured for ${browser}`, 'u'));
       assert.match(client.getInstructions(), /explicit user approval before confirm_browser_setup/u);
-      assert.equal((await client.listTools()).tools.length, 10);
+      assert.equal((await client.listTools()).tools.length, 12);
       const call = async (name, args = {}) => JSON.parse((await client.callTool({ name, arguments: args })).content[0].text);
       const initial = await call('setup_status');
       assert.equal(initial.nativeInstalled, false); assert.equal(initial.profileConfigured, false, 'Never adopt ChatGPT credentials.');
-      assert.equal(initial.clientName, `Claude — ${browser === 'chrome' ? 'Chrome' : 'Firefox'}`);
+      assert.equal(initial.clientName, `Claude Desktop — ${browser === 'chrome' ? 'Chrome' : 'Firefox'}`);
       assert.equal((await client.callTool({ name: 'read_page_context', arguments: { connectionId: 'synthetic_connection_001' } })).isError, true);
       const plan = await call('prepare_browser_setup', { instanceId, extensionId });
       assert.equal(plan.confirmationRequired, true);
@@ -118,7 +123,7 @@ try {
       assert.equal((await call('read_page_context', { connectionId: 'synthetic_connection_001' })).context, `Synthetic ${browser} installed-copy context`);
       const rejection = await call('click_element', { connectionId: 'synthetic_connection_001', snapshotId: randomUUID(), elementRef: randomUUID(), operationId: randomUUID() });
       assert.equal(rejection.error, 'approval-denied');
-      results.push({ browser, tools: 10, cleanIsolatedSetup: true, chatgptProfileUntouched: true, syntheticPairingReadWriteDenial: true });
+      results.push({ browser, tools: 12, cleanIsolatedSetup: true, chatgptProfileUntouched: true, syntheticPairingReadWriteDenial: true });
     } finally {
       await client?.close().catch(() => {}); native?.destroy();
       if (config) await stopOwnedBroker(config);

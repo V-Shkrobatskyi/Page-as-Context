@@ -1,11 +1,11 @@
-# Page as Context for Claude Desktop
+# Page as Context for Claude
 
 Private, unsigned desktop extension for macOS Apple silicon. Includes Node
 24.10.0 and production dependencies; no global Node/npm or separate setup app
 is needed. Requires the Page as Context browser extension. Actual client and
 account availability must be verified in Claude Desktop; SDK checks are separate.
 
-## Install and select a browser
+## Install in Claude Desktop and select a browser
 
 1. In Claude Desktop open **Settings → Desktop app → Extensions → Manage**
    (or **Settings → Extensions** in the older layout).
@@ -17,7 +17,7 @@ account availability must be verified in Claude Desktop; SDK checks are separate
    restarting the extension (restart Claude if necessary) and connecting tabs
    explicitly. Each browser has a separate private Claude profile.
 4. Start a chat and ask Claude to set up Page as Context for the chosen browser.
-   The server provides ten setup/page tools and setup instructions through MCP;
+   The server provides twelve setup/page tools and setup instructions through MCP;
    this package does not depend on ChatGPT skills.
 
 ## Pair and connect a tab
@@ -32,17 +32,16 @@ and explicitly approve them before `confirm_browser_setup`; keep Claude's
 confirmation enabled for that mutating tool. Adding another browser can restart
 the shared bridge and end live connections; the plan must disclose this.
 
-Click **Start helper connection** in the extension. Ask Claude to call
-`get_pairing_status`, compare the code with **Pairing requests** in the browser,
-and approve there yourself. Existing approved credentials may report approval
-without a new code. Setup and pairing do not grant access to a tab.
+Automatic connects the bridge; use **Retry connection** if needed. Only Manual
+mode requires **Start helper connection**. Ask for `get_pairing_status`, compare
+the code with the browser popup and approve yourself. Explicitly include this
+app in shared tab access if desired. Pairing alone grants no tab access.
 
-On the page to share, choose **Connect MCP** in the extension popup. In
-**Approved clients**, choose **Claude — Chrome** or **Claude — Firefox** and
-connect the selected tab. The button shows the applied mode: **read only** or
-**read and write**. Actions use the applied write-approval setting; the default
-is **Ask before each action**. Give Claude only the displayed **Connection ID**.
-Never share credential files. Your AI client may forward context to its provider.
+On each source page choose **AI: Read** or **AI: Write** in the popup menu. Write
+includes reading and supported actions, with approval before each action by
+default. Claude obtains current connection IDs using `list_shared_tabs` or
+`resolve_shared_tab`. Manual retains **Connect MCP → Connect selected tab**.
+
 
 ## Recovery, updates and removal
 
@@ -60,3 +59,18 @@ Claude credentials are under `~/.page-as-context/claude/profiles/`; ChatGPT's
 profiles remain independent. Client display names are self-declared, not proof
 of application identity. This package uses only stdio and private local IPC/
 Native Messaging. The temporary HTTP test fixture is not its MCP transport.
+
+## Install in Claude Code
+
+This is the same Page as Context for Claude integration and version, packaged
+with the Code installation manifest. Extract the supplied plugin ZIP, add its
+`marketplace` directory with `/plugin marketplace add`, and install
+`page-as-context@page-as-context-local` through `/plugin`. For a local preview,
+launch `claude --plugin-dir /absolute/path/marketplace/plugins/page-as-context`.
+The plugin provides Chrome and Firefox routes; explicitly choose which one to
+set up. Follow the same pairing and AI: Read/Write steps above.
+
+Desktop MCPB and Code plugin directory have different installation entry points;
+there is one shared server and release version. Desktop and Code keep independent
+credentials (`claude/profiles/` and `claude-code/profiles/`) so either can be
+revoked without affecting the other. One plugin does not imply shared secrets.

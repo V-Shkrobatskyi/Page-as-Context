@@ -8,6 +8,9 @@ import { randomUUID } from 'node:crypto';
 
 const source = resolve(process.argv[2] ?? '');
 if (!process.argv[2]) throw new Error('Pass the built marketplace folder. Run this check with its bundled runtime/node.');
+const clientKind = process.argv[3] ?? 'chatgpt', browser = process.argv[4] ?? 'chrome';
+assert.ok(['chatgpt', 'claude-code'].includes(clientKind)); assert.ok(['chrome', 'firefox'].includes(browser));
+const extensionId = browser === 'chrome' ? 'a'.repeat(32) : 'page-as-context@synthetic.test';
 const originalPlugin = join(source, 'plugins/page-as-context');
 const from = (root, path) => import(pathToFileURL(join(root, path)));
 const { verifyPackage, stagePackage } = await from(originalPlugin, 'helper/src/desktop-package.mjs');
@@ -20,6 +23,13 @@ let broker, client, second, native;
 try {
   const { target } = await stagePackage(source, join(root, 'private installation'));
   const plugin = join(target, 'plugins/page-as-context');
+  if (clientKind === 'claude-code') {
+    const pluginManifest = JSON.parse(await readFile(join(plugin, '.claude-plugin/plugin.json'), 'utf8'));
+    const desktopManifest = JSON.parse(await readFile(join(plugin, 'manifest.json'), 'utf8'));
+    const servers = JSON.parse(await readFile(join(plugin, '.mcp.json'), 'utf8')).mcpServers;
+    assert.equal(pluginManifest.version, desktopManifest.version); assert.equal(pluginManifest.version, release.version);
+    for (const browser of ['chrome', 'firefox']) assert.deepEqual(servers[`browser-${browser}`].args.slice(-2), ['--client', 'code']);
+  }
   // Every runtime import below comes from the installed copy, never helper/node_modules.
   const { Client } = await from(plugin, 'helper/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js');
   const { StdioClientTransport } = await from(plugin, 'helper/node_modules/@modelcontextprotocol/sdk/dist/esm/client/stdio.js');
@@ -32,25 +42,25 @@ try {
   const state = join(root, 'browser state'), instanceId = randomUUID();
   const connect = async () => {
     const value = new Client({ name: 'installed-package-check', version: '1' });
-    await value.connect(new StdioClientTransport({ command: join(plugin, 'runtime/node'), args: [join(plugin, 'server.mjs'), 'chrome', '--directory', state, '--manifest-home', join(root, 'isolated browser home')], cwd: tmpdir(), env: { PATH: '/usr/bin:/bin' }, stderr: 'pipe' }));
+    await value.connect(new StdioClientTransport({ command: join(plugin, 'runtime/node'), args: [join(plugin, 'server.mjs'), browser, ...(clientKind === 'claude-code' ? ['--client', 'code'] : []), '--directory', state, '--manifest-home', join(root, 'isolated browser home')], cwd: tmpdir(), env: { PATH: '/usr/bin:/bin' }, stderr: 'pipe' }));
     return value;
   };
   client = await connect();
   assert.equal(client.getServerVersion().version, release.version);
-  assert.equal((await client.listTools()).tools.length, 10);
+  assert.equal((await client.listTools()).tools.length, 12);
   const setupStatus = JSON.parse((await client.callTool({ name: 'setup_status', arguments: {} })).content[0].text);
   assert.equal(setupStatus.nativeInstalled, false);
   assert.equal((await client.callTool({ name: 'read_page_context', arguments: { connectionId: 'synthetic_connection_001' } })).isError, true);
   assert.deepEqual(await readdir(state), []);
   const call = async (name, args) => JSON.parse((await client.callTool({ name, arguments: args })).content[0].text);
-  const plan = await call('prepare_browser_setup', { instanceId, extensionId: 'a'.repeat(32) });
+  const plan = await call('prepare_browser_setup', { instanceId, extensionId });
   assert.equal(plan.confirmationRequired, true);
   assert.deepEqual(await readdir(state), []);
   assert.equal((await call('confirm_browser_setup', { requestId: plan.requestId, confirmed: false })).error, 'setup-confirmation-required');
   const started = await call('confirm_browser_setup', { requestId: plan.requestId, confirmed: true });
   assert.equal(started.error, undefined);
   const { privateJson } = await from(plugin, 'helper/src/security.mjs');
-  const credential = await privateJson(join(state, 'chatgpt/profiles/chrome.json'));
+  const credential = await privateJson(join(state, `${clientKind}/profiles/${browser}.json`));
   await client.listTools();
   const config = await configuration(state); broker = await brokerReady(config);
   native = await connectSocket(config.socket);
@@ -68,7 +78,7 @@ try {
     else result = { status: 'rejected', error: 'approval-denied' };
     for (const chunk of resultChunks(message.id, result)) writeFrame(native, chunk);
   }, () => native.destroy());
-  writeFrame(native, { type: 'hello', role: 'native', protocol: PROTOCOL, instanceId: credential.instanceId, browser: credential.browser, caller: `chrome-extension://${'a'.repeat(32)}/`, secret: config.hostSecret });
+  writeFrame(native, { type: 'hello', role: 'native', protocol: PROTOCOL, instanceId: credential.instanceId, browser: credential.browser, caller: browser === 'chrome' ? `chrome-extension://${extensionId}/` : extensionId, secret: config.hostSecret });
   await nativeReady;
   const waitPairing = async status => {
     const deadline = Date.now() + 5000;
@@ -98,12 +108,12 @@ try {
   broker = undefined;
   await new Promise(resolve => setTimeout(resolve, 100));
   await uninstall(state);
-  assert.ok((await readdir(state)).includes('chatgpt'), 'Credentials remain until explicit cleanup.');
-  console.log(JSON.stringify({ passed: true, version: release.version, packageFiles: Object.keys(release.files).length,
-    installedCopy: true, globalNodeRequired: false, setupAppRequired: false, tools: 10, setupStatusWithoutInstallation: true,
+  assert.ok((await readdir(state)).includes(clientKind), 'Credentials remain until explicit cleanup.');
+  console.log(JSON.stringify({ passed: true, client: clientKind, browser, version: release.version, packageFiles: Object.keys(release.files).length,
+    installedCopy: true, globalNodeRequired: false, setupAppRequired: false, tools: 12, setupStatusWithoutInstallation: true,
     explicitSetupConfirmation: true, cleanInstallViaMcp: true, syntheticPairingCodeAndApproval: true, unconfiguredReadRejected: true, syntheticRead: true,
     sharedSessionPreserved: true, syntheticWriteDenied: true, scopedDisconnect: true, isolatedUninstall: true,
-    limitation: 'SDK and synthetic native endpoint only; actual ChatGPT/plugin browser approval acceptance is separate.' }, null, 2));
+    limitation: 'SDK and synthetic native endpoint only; actual AI-client/plugin browser approval acceptance is separate.' }, null, 2));
 } finally {
   await client?.close().catch(() => {}); await second?.close().catch(() => {}); native?.destroy();
   if (broker) { try { process.kill(broker.pid, 'SIGTERM'); } catch {} }

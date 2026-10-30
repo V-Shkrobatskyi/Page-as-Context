@@ -1,16 +1,28 @@
 {
   "name": "@page-as-context/helper",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "license": "GPL-3.0-only",
   "description": "Local MCP stdio and Native Messaging transport for Page as Context.",
-  "engines": { "node": ">=24.10.0 <25" },
-  "bin": { "page-as-context-helper": "src/cli.mjs" },
-  "files": ["src", "README.md", "LICENSE", "MCP_SDK_LICENSE", "THIRD_PARTY_NOTICES.txt"],
+  "engines": {
+    "node": ">=24.10.0 <25"
+  },
+  "bin": {
+    "page-as-context-helper": "src/cli.mjs"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "MCP_SDK_LICENSE",
+    "THIRD_PARTY_NOTICES.txt"
+  ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "check": "node --check src/cli.mjs && node --check src/broker.mjs && node --check src/native.mjs && npm test && npm pack --dry-run"
   },
-  "dependencies": { "@modelcontextprotocol/sdk": "1.32.2" }
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2"
+  }
 }
