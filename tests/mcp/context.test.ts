@@ -5,7 +5,7 @@ const state = vi.hoisted(() => ({ stored: {} as Record<string, unknown>, managed
 vi.mock('wxt/browser', () => ({ browser: state.api }));
 vi.mock('@/src/adapters/capture', () => ({ captureActiveTab: state.capture }));
 vi.mock('@/src/adapters/actions/snapshot', () => ({ createActionSnapshot: async (_tabId: number, lease: object) => ({ ...lease, targets: new Map(), dispose: vi.fn() }) }));
-import { defaultMcpSettings, resolveMcpSettings, validateMcpSettings } from '@/src/mcp/settings';
+import { defaultMcpSettings, resolveMcpSettings, validateMcpSettings, mcpWritesEnabled, autoDisconnectMilliseconds } from '@/src/mcp/settings';
 import { readMcpContext } from '@/src/mcp/capture';
 import { validatePolicy, assertAction } from '@/src/policy/model';
 import { sourceAllowed } from '@/src/policy/sources';
@@ -16,6 +16,17 @@ beforeEach(() => {
     get: vi.fn(async () => state.stored), set: vi.fn(async (value: object) => Object.assign(state.stored, value)),
   } }, tabs: { get: vi.fn(async () => ({ id: 7, url: 'https://example.test/page' })), query: vi.fn() }, runtime: { sendMessage: vi.fn() } });
   state.capture.mockResolvedValue({ ok: true, tree: { schemaVersion: 1, title: 'Synthetic', sourceUrl: 'https://example.test/page', root: { role: 'page', name: 'Synthetic', children: [{ role: 'textbox', name: 'Password', value: 'test-secret-should-be-redacted', children: [] }] } } });
+});
+
+it('defaults Automatic inactivity to one hour and converts the selectable periods', () => {
+  expect(autoDisconnectMilliseconds(defaultMcpSettings())).toBe(3600000);
+  for (const [unit, milliseconds] of [['minutes', 60000], ['hours', 3600000], ['days', 86400000], ['unlimited', Infinity]] as const) {
+    const settings = validateMcpSettings({ ...defaultMcpSettings(), autoDisconnect: { amount: 2, unit } });
+    expect(autoDisconnectMilliseconds(settings)).toBe(milliseconds * 2);
+  }
+});
+it.each([null, [], { amount: 0, unit: 'hours' }, { amount: -1, unit: 'days' }, { amount: 1.5, unit: 'minutes' }, { amount: 1000, unit: 'days' }, { amount: '1', unit: 'hours' }, { amount: 1, unit: 'weeks' }, { amount: 1, unit: 'hours', unexpected: true }])('rejects invalid auto-disconnect settings: %j', autoDisconnect => {
+  expect(() => validateMcpSettings({ ...defaultMcpSettings(), autoDisconnect })).toThrow();
 });
 
 describe('MCP settings, policy and shared context', () => {
@@ -86,4 +97,23 @@ describe('MCP settings, policy and shared context', () => {
     state.capture.mockResolvedValue({ ok: true, tree: { schemaVersion: 1, root: { role: 'page', children: [{ role: 'StaticText', name: '"'.repeat(20000), children: [] }] } } });
     await expect(readMcpContext(7, () => {}, true, new AbortController().signal)).rejects.toThrow('response-limit');
   });
+});
+
+
+it.each(['automatic', 'manual'] as const)('uses Mode as the write ceiling for %s connections', connection => {
+  expect(mcpWritesEnabled({ ...defaultMcpSettings(), connection, mode: 'read-only' })).toBe(false);
+  expect(mcpWritesEnabled({ ...defaultMcpSettings(), connection, mode: 'read-write' })).toBe(true);
+});
+it.each([
+  ['automatic', 'read-only', true, 'read-only'],
+  ['automatic', 'read-write', false, 'read-only'],
+  ['automatic', 'read-write', true, 'read-write'],
+  ['manual', 'read-write', false, 'read-write'],
+] as const)('migrates %s/%s with legacy actions=%s to %s without widening permissions', (connection, mode, allowPageActions, expected) => {
+  const settings = validateMcpSettings({ ...defaultMcpSettings(), connection, mode, allowPageActions });
+  expect(settings.mode).toBe(expected); expect(settings).not.toHaveProperty('allowPageActions');
+  expect(validateMcpSettings(settings)).toEqual(settings);
+});
+it('rejects a malformed legacy checkbox instead of granting access', () => {
+  expect(() => validateMcpSettings({ ...defaultMcpSettings(), allowPageActions: 'true' })).toThrow();
 });

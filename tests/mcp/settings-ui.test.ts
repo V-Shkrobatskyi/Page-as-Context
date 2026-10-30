@@ -54,7 +54,7 @@ it.each([
   (document.querySelector('#clients button') as HTMLButtonElement).click();
   await vi.waitFor(() => expect(document.getElementById('status')!.textContent).toContain(expected));
   expect(document.getElementById('status')!.textContent).not.toContain('Private internal detail');
-  expect(document.getElementById('connections')!.textContent).toBe('');
+  expect(document.getElementById('connections')).toBeNull();
 });
 
 
@@ -117,7 +117,7 @@ it('shows client names, codes and separate selected and connected tab titles as 
   await import('@/entrypoints/mcp/main');
   await vi.waitFor(() => expect(document.getElementById('pairing')!.textContent).toContain('ABCD1234'));
   expect(document.getElementById('pairing')!.textContent).toContain('New <b>client</b>');
-  expect(document.getElementById('pairing')!.textContent).toContain('Selected tab (not connected): Selected <img> tab');
+  expect(document.querySelector('#pairing .client-tab')).toBeNull();
   expect(document.getElementById('clients')!.textContent).toContain('ChatGPT — Firefox');
   expect(document.getElementById('clients')!.textContent).toContain('Connected tab: Connected tab title');
   expect(document.querySelector('#pairing b, #pairing img')).toBeNull();
@@ -152,4 +152,102 @@ it('ignores state-change notifications from content scripts and other extensions
     listener({ type: 'mcp-state-changed-v1' }, { id: 'synthetic-extension', tab: { id: 7 } });
   }
   expect(fixture.send).toHaveBeenCalledTimes(before);
+});
+
+
+it.each(['automatic', 'manual'] as const)('shows the shared Mode selector without a page-actions checkbox in %s', async connection => {
+  fixture.send.mockResolvedValue({ ...state(true), settings: { ...state(true).settings, connection, mode: 'read-write' } });
+  await import('@/entrypoints/mcp/main');
+  await vi.waitFor(() => expect((document.getElementById('mode') as HTMLSelectElement).value).toBe('read-write'));
+  expect(document.getElementById('mode-label')!.hidden).toBe(false);
+  expect(document.getElementById('page-actions')).toBeNull();
+  const selector = document.getElementById('connection') as HTMLSelectElement;
+  selector.value = connection === 'automatic' ? 'manual' : 'automatic'; selector.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(document.getElementById('mode-label')!.hidden).toBe(false);
+  expect((document.getElementById('mode') as HTMLSelectElement).value).toBe('read-write');
+});
+it('saves only Mode when switching connection type', async () => {
+  fixture.send.mockResolvedValue({ ...state(false), settings: { ...state(false).settings, connection: 'automatic' } });
+  await import('@/entrypoints/mcp/main');
+  await vi.waitFor(() => expect((document.getElementById('connection') as HTMLSelectElement).value).toBe('automatic'));
+  const selector = document.getElementById('mode') as HTMLSelectElement;
+  selector.value = 'read-write'; selector.dispatchEvent(new Event('input', { bubbles: true }));
+  document.getElementById('preferences')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await vi.waitFor(() => expect(fixture.send.mock.calls.some(([message]) => message.action === 'apply')).toBe(true));
+  const saved = fixture.send.mock.calls.find(([message]) => message.action === 'apply')![0].settings;
+  expect(saved.mode).toBe('read-write'); expect(saved.connection).toBe('automatic'); expect(saved).not.toHaveProperty('allowPageActions');
+});
+
+it('shows the inactivity controls only for Automatic and disables the amount for unlimited', async () => {
+  fixture.send.mockResolvedValue({ ...state(false), settings: { ...state(false).settings, connection: 'automatic' } });
+  await import('@/entrypoints/mcp/main');
+  await vi.waitFor(() => expect(document.getElementById('auto-disconnect-setting')!.hidden).toBe(false));
+  const amount = document.getElementById('timeout-amount') as HTMLInputElement;
+  const unit = document.getElementById('timeout-unit') as HTMLSelectElement;
+  expect(amount.value).toBe('1'); expect(unit.value).toBe('hours'); expect(amount.disabled).toBe(false);
+  unit.value = 'unlimited'; unit.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(amount.disabled).toBe(true);
+  const connection = document.getElementById('connection') as HTMLSelectElement;
+  connection.value = 'manual'; connection.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(document.getElementById('auto-disconnect-setting')!.hidden).toBe(true);
+  connection.value = 'automatic'; connection.dispatchEvent(new Event('input', { bubbles: true }));
+  unit.value = 'days'; unit.dispatchEvent(new Event('input', { bubbles: true })); amount.value = '2';
+  expect(amount.disabled).toBe(false);
+  document.getElementById('preferences')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await vi.waitFor(() => expect(fixture.send.mock.calls.some(([message]) => message.action === 'apply')).toBe(true));
+  expect(fixture.send.mock.calls.find(([message]) => message.action === 'apply')![0].settings.autoDisconnect).toEqual({ amount: 2, unit: 'days' });
+});
+
+it.each(['write', 'read', 'policy', 'locked'])('renders per-client Skip prompts controls for %s', async variant => {
+  fixture.send.mockResolvedValue({ ...state(true), transport: 'ready', locked: variant === 'locked', sessionApprovalAllowed: variant !== 'policy', sharedTabs: [
+    { tabRef: 'shared_tab_001', title: 'Test tab', mode: variant === 'read' ? 'read' : 'write', expires: null, connections: [
+      { connectionId: 'connection_001', name: 'Client A', write: variant !== 'read', skipPrompts: true },
+      { connectionId: 'connection_002', name: 'Client B', write: variant !== 'read', skipPrompts: false },
+    ] },
+  ] });
+  await import('@/entrypoints/mcp/main');
+  await vi.waitFor(() => expect(document.querySelectorAll('.shared-client-approval input')).toHaveLength(2));
+  const inputs = [...document.querySelectorAll<HTMLInputElement>('.shared-client-approval input')];
+  expect(inputs.map(input => input.checked)).toEqual([true, false]);
+  expect(inputs.map(input => input.disabled)).toEqual([variant !== 'write', variant !== 'write']);
+  expect([...document.querySelectorAll('.shared-tabs-table th')].map(cell => cell.textContent)).toEqual(['Tab', 'Access', 'Skip prompts', 'Time left', 'Action']);
+  if (variant === 'write') {
+    inputs[1]!.click();
+    await vi.waitFor(() => expect(fixture.send.mock.calls.some(([message]) => message.action === 'connection-approval')).toBe(true));
+    expect(fixture.send.mock.calls.find(([message]) => message.action === 'connection-approval')![0]).toMatchObject({
+      tabRef: 'shared_tab_001', connectionId: 'connection_002', skip: true,
+    });
+  }
+});
+
+it('counts down in a separate column locally and displays Unlimited without polling', async () => {
+  vi.useFakeTimers();
+  fixture.send.mockResolvedValue({ ...state(true), sharedTabs: [
+    { tabRef: 'shared_tab_001', title: 'Timed tab', mode: 'read', expires: Date.now() + 62000 },
+    { tabRef: 'shared_tab_002', title: 'Unlimited tab', mode: 'write', expires: null },
+  ] });
+  await import('@/entrypoints/mcp/main');
+  await vi.waitFor(() => expect(document.querySelectorAll('#shared-tabs tr')).toHaveLength(2));
+  expect([...document.querySelectorAll('#shared-tabs tr:first-child td')].map(cell => cell.textContent)).toEqual(['Timed tab', 'Read', '—', '2 min', 'Off']);
+  expect(document.querySelector('#shared-tabs tr:last-child .shared-tab-remaining')!.textContent).toBe('Unlimited');
+  const calls = fixture.send.mock.calls.length;
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(document.querySelector('#shared-tabs .shared-tab-remaining')!.textContent).toBe('59 sec');
+  await vi.advanceTimersByTimeAsync(60000);
+  expect(document.querySelector('#shared-tabs .shared-tab-remaining')!.textContent).toBe('0 sec');
+  expect(fixture.send).toHaveBeenCalledTimes(calls);
+  window.dispatchEvent(new Event('pagehide'));
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('updates the countdown when activity changes the deadline without adding another timer', async () => {
+  vi.useFakeTimers();
+  let current = { ...state(true), sharedTabs: [{ tabRef: 'shared_tab_001', title: 'Timed tab', mode: 'read', expires: Date.now() + 120000 }] };
+  fixture.send.mockImplementation(async () => current);
+  await import('@/entrypoints/mcp/main');
+  await vi.waitFor(() => expect(document.querySelector('#shared-tabs .shared-tab-remaining')!.textContent).toBe('2 min'));
+  current = { ...current, sharedTabs: [{ ...current.sharedTabs[0]!, expires: Date.now() + 3600000 }] };
+  for (const listener of fixture.messages) listener({ type: 'mcp-state-changed-v1' }, { id: 'synthetic-extension' });
+  await vi.waitFor(() => expect(document.querySelector('#shared-tabs .shared-tab-remaining')!.textContent).toBe('60 min'));
+  expect(vi.getTimerCount()).toBe(1);
 });

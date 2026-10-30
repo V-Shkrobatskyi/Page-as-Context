@@ -28,6 +28,7 @@ interface ChromeApi {
     getURL(path: string): string;
   };
   debugger: {
+    getTargets(): Promise<Array<{ type: string; tabId?: number; url: string; title: string }>>;
     attach(target: { tabId: number }, requiredVersion: string, callback: () => void): void;
     sendCommand(
       target: { tabId: number; sessionId?: string },

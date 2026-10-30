@@ -16,8 +16,8 @@ export function browserManifest(target: string): UserManifest {
       'select-element': { description: 'Select an element', suggested_key: { default: 'Alt+Shift+E', mac: 'Alt+Shift+E' } },
     },
     permissions: target === 'firefox'
-      ? ['activeTab', 'scripting', 'clipboardWrite', 'storage']
-      : ['debugger', 'activeTab', 'scripting', 'clipboardWrite', 'downloads', 'storage'],
+      ? ['activeTab', 'scripting', 'clipboardWrite', 'storage', 'alarms']
+      : ['debugger', 'activeTab', 'scripting', 'clipboardWrite', 'downloads', 'storage', 'alarms'],
     ...(target === 'firefox' ? {} : { minimum_chrome_version: '125', storage: { managed_schema: 'managed-schema.json' } }),
     ...(target === 'firefox' ? {
       optional_permissions: ['downloads', 'nativeMessaging'],

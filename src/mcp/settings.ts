@@ -10,30 +10,50 @@ import { validateDataControls, type DataControls } from '../core/data-controls';
 import { MCP_MODES, type McpMode } from './policy';
 
 export const MCP_SETTINGS_KEY = 'mcp-settings-v1';
+export interface McpAutoDisconnect { amount: number; unit: 'minutes' | 'hours' | 'days' | 'unlimited' }
+export const defaultAutoDisconnect = (): McpAutoDisconnect => ({ amount: 1, unit: 'hours' });
 export interface McpSettings {
   version: 1;
   enabled: boolean;
+  connection?: 'automatic' | 'manual';
   mode: McpMode;
   inherit: boolean;
   preferences?: ExportPreferences;
   data?: DataControls;
   writeApproval?: 'each-action' | 'session';
+  autoDisconnect?: McpAutoDisconnect;
 }
-export const defaultMcpSettings = (): McpSettings => ({ version: 1, enabled: false, mode: 'read-only', inherit: true });
+export const defaultMcpSettings = (): McpSettings => ({ version: 1, enabled: false, connection: 'automatic', mode: 'read-only', inherit: true });
+export const automaticMcp = (settings: McpSettings) => settings.connection === 'automatic';
+export const mcpWritesEnabled = (settings: McpSettings) => settings.mode === 'read-write';
+export function autoDisconnectMilliseconds(settings: McpSettings): number {
+  const timeout = settings.autoDisconnect ?? defaultAutoDisconnect();
+  return timeout.unit === 'unlimited' ? Infinity : timeout.amount * ({ minutes: 60000, hours: 3600000, days: 86400000 }[timeout.unit]);
+}
 export function validateMcpSettings(raw: unknown): McpSettings {
   if (raw === undefined) return defaultMcpSettings();
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new PolicyError('Unable to load MCP settings.');
-  const value = raw as McpSettings;
-  if (Object.keys(raw).some(key => !['version', 'enabled', 'mode', 'inherit', 'preferences', 'data', 'writeApproval'].includes(key)) || value.version !== 1 ||
+  const value = raw as McpSettings & { allowPageActions?: boolean };
+  if (Object.keys(raw).some(key => !['version', 'enabled', 'connection', 'allowPageActions', 'mode', 'inherit', 'preferences', 'data', 'writeApproval', 'autoDisconnect'].includes(key)) || value.version !== 1 ||
+    value.connection !== undefined && !['automatic', 'manual'].includes(value.connection) ||
+    value.allowPageActions !== undefined && typeof value.allowPageActions !== 'boolean' ||
     value.writeApproval !== undefined && !['each-action', 'session'].includes(value.writeApproval) ||
     typeof value.enabled !== 'boolean' || typeof value.inherit !== 'boolean' || !MCP_MODES.includes(value.mode)) throw new PolicyError('Unable to load MCP settings.');
+  if (value.autoDisconnect !== undefined) {
+    const timeout = value.autoDisconnect;
+    if (!timeout || typeof timeout !== 'object' || Array.isArray(timeout) || Object.keys(timeout).some(key => !['amount', 'unit'].includes(key)) ||
+      !['minutes', 'hours', 'days', 'unlimited'].includes(timeout.unit) || !Number.isSafeInteger(timeout.amount) || timeout.amount < 1 || timeout.amount > 999) throw new PolicyError('Invalid tab auto-disconnect settings.');
+  }
   if (value.preferences !== undefined) {
     const p = value.preferences;
     if (!p || typeof p !== 'object' || Object.keys(p).some(key => !['format', 'compression', 'redactSensitiveData'].includes(key)) ||
       !['semantic-text', 'markdown'].includes(p.format) || !COMPRESSION_LEVELS.includes(p.compression) || typeof p.redactSensitiveData !== 'boolean') throw new PolicyError('Invalid MCP export preferences.');
   }
   if (!value.inherit && !value.preferences) throw new PolicyError('MCP export preferences are required.');
-  return { ...value, ...(value.data !== undefined ? { data: validateDataControls(value.data) } : {}) };
+  // Accept the prerelease checkbox only for migration; never widen a saved Mode.
+  const { allowPageActions, ...settings } = value;
+  return { ...settings, ...(automaticMcp(settings) && allowPageActions === false ? { mode: 'read-only' as const } : {}),
+    ...(value.data !== undefined ? { data: validateDataControls(value.data) } : {}) };
 }
 
 export async function resolveMcpSettings(draft?: McpSettings) {

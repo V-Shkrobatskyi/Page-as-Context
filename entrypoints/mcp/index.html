@@ -20,7 +20,7 @@
         <a href="/mcp.html" aria-current="page">MCP</a>
         <a href="/guide.html">Guide</a>
       </div>
-      <div class="site-nav-secondary"><a href="/privacy.html">Privacy</a> <a href="/license.html">License</a> <a href="https://github.com/V-Shkrobatskyi/Copy-as-Context" target="_blank" rel="noopener noreferrer">GitHub ↗</a></div>
+      <div class="site-nav-secondary"><a href="/privacy.html">Privacy</a> <a href="/license.html">License</a> <a href="https://github.com/V-Shkrobatskyi/Page-as-Context" target="_blank" rel="noopener noreferrer">GitHub ↗</a></div>
 
       <label class="theme-picker">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none"/></svg>
@@ -75,11 +75,20 @@
           <h2 id="access-heading">Access and approval</h2>
           <div class="settings-panel">
             <label class="check-option"><input id="enabled" type="checkbox" /><span>Enable MCP</span></label>
-            <div class="settings-grid">
-              <label for="mode">Mode<select id="mode" aria-describedby="mode-note"><option value="read-only">Read only</option><option value="read-write">Read and write</option></select></label>
+            <div class="settings-grid access-grid">
+              <label for="connection">Connection<select id="connection"><option value="automatic">Automatic</option><option value="manual">Manual</option></select></label>
+              <label id="mode-label" for="mode">Mode<select id="mode" aria-describedby="mode-note"><option value="read-only">Read only</option><option value="read-write">Read and write</option></select></label>
               <label for="write-approval">Write approval<select id="write-approval" aria-describedby="mode-note"><option value="each-action">Ask before each action</option><option value="session">Allow for this connection</option></select></label>
             </div>
-            <p id="mode-note" class="note">Read only shares context. Read and write also allows supported page actions with a separate tab grant. Allow for this connection skips repeated extension approval prompts for that connection only; access ends on navigation, expiry or disconnection. Your organization may require approval before each action.</p>
+            <div id="auto-disconnect-setting" class="timeout-setting" hidden>
+              <label for="timeout-amount">Auto-disconnect tabs</label>
+              <div class="timeout-fields">
+                <input id="timeout-amount" type="number" min="1" max="999" step="1" value="1" required aria-label="Inactivity duration" aria-describedby="timeout-note" />
+                <select id="timeout-unit" aria-label="Inactivity period" aria-describedby="timeout-note"><option value="minutes">minutes</option><option value="hours" selected>hours</option><option value="days">days</option><option value="unlimited">unlimited</option></select>
+              </div>
+              <p id="timeout-note" class="note">After inactivity. Successful reads and actions restart the timer for that tab. Organization limits still apply.</p>
+            </div>
+            <p id="mode-note" class="note">Mode limits tab access. Automatic: choose AI Read or Write in the popup; access follows the tab across sites. New tabs start Off. Manual: connect a tab here. Write approval sets the default; Skip prompts changes one Automatic client connection. Organization rules still apply.</p>
             <div class="apply-bar">
               <button type="submit" id="apply-access" class="primary-action">Apply settings</button>
               <span id="draft-state-access" class="note" role="status">Applied</span>
@@ -89,7 +98,6 @@
 
         <section class="mcp-section" aria-labelledby="context-heading">
           <h2 id="context-heading">Context settings</h2>
-          <p class="section-description">Shared privacy filters, data controls and organization restrictions always apply.</p>
           <div class="settings-panel">
             <label class="check-option"><input id="inherit" type="checkbox" checked /><span>Use extension export settings</span></label>
             <div class="settings-grid">
@@ -109,16 +117,15 @@
 
       <section class="mcp-section" aria-labelledby="connection-heading">
         <h2 id="connection-heading">Helper connection</h2>
-        <p class="section-description">The separate local helper connects your browser to the AI client. Enable MCP and apply your settings before starting it.</p>
         <div class="settings-panel">
           <p id="transport" class="connection-status">Checking helper…</p>
           <div class="action-group">
             <button id="start" class="primary-action" type="button" disabled>Start helper connection</button>
-            <button id="refresh" type="button">Refresh status</button>
+            <button id="refresh" type="button">Refresh status</button><button id="pause" type="button">Pause all</button>
           </div>
           <details class="connection-details">
             <summary>Setup and browser instance</summary>
-            <p class="note">Ask the Page as Context plugin in your AI client to set up this browser. Review the setup plan, then compare the pairing code from the chat with the request below. The local bridge starts automatically after setup. Follow the <a href="/guide.html#mcp-integration">local setup guide</a> or the <a href="https://github.com/V-Shkrobatskyi/Page-as-Context/blob/main/docs/mcp-integration.md" target="_blank" rel="noopener noreferrer">full setup instructions ↗</a>. Use this instance when pairing a client.</p>
+            <p class="note">Ask the Page as Context plugin in your AI client to set up this browser. Review the setup plan, then compare the pairing code from the chat with the request below. Automatic mode connects the browser bridge after setup; Manual mode requires Start helper connection. Follow the <a href="/guide.html#mcp-integration">local setup guide</a> or the <a href="https://github.com/V-Shkrobatskyi/Page-as-Context/blob/main/docs/mcp-integration.md" target="_blank" rel="noopener noreferrer">full setup instructions ↗</a>. Use this instance when pairing a client.</p>
             <p id="instance" class="instance-id"></p>
           </details>
         </div>
@@ -134,6 +141,21 @@
       <section class="mcp-section" aria-labelledby="clients-heading">
         <h2 id="clients-heading">Pairing and clients</h2>
         <div class="settings-panel client-panel">
+          <h3 id="shared-tabs-heading">Shared tabs</h3>
+          <div class="shared-tabs-scroll" tabindex="0" role="region" aria-labelledby="shared-tabs-heading">
+          <table class="shared-tabs-table" aria-labelledby="shared-tabs-heading">
+            <thead><tr>
+              <th scope="col">Tab</th>
+              <th scope="col">Access</th>
+              <th scope="col" class="shared-tab-approvals" title="Skip action confirmations for this client and tab until navigation or disconnection">Skip prompts</th>
+              <th scope="col" class="shared-tab-remaining" title="Time until automatic disconnection">Time left</th>
+              <th scope="col">Action</th>
+            </tr></thead>
+            <tbody id="shared-tabs"></tbody>
+          </table>
+          </div>
+        </div>
+        <div class="settings-panel client-panel">
           <h3>Pairing requests</h3>
           <p class="note">Compare the code with your helper before approving. Client names are self-declared; approve only a pairing you initiated.</p>
           <div id="pairing"><p class="empty-state">No pending pairing requests.</p></div>
@@ -143,13 +165,11 @@
           <p class="note">Choose a client to connect the selected tab, or revoke its access. Revoke removes only that client's approval and connections; the helper and other clients stay connected.</p>
           <p id="connection-mode-note" class="note">Connecting a tab grants access in the applied mode shown on the button. Changing settings alone does not connect a tab.</p>
           <div id="clients"><p class="empty-state">No approved clients yet. Pair a client through the helper to get started.</p></div>
-          <p id="connections" class="connection-list"></p>
         </div>
       </section>
 
       <section class="mcp-section" aria-labelledby="test-heading">
         <h2 id="test-heading">Test MCP output</h2>
-        <p class="section-description">Check the filtered result before sharing. This local test needs no helper, grants no external access and sends nothing to a model.</p>
         <div class="settings-panel">
           <div class="action-group">
             <button id="test" class="primary-action" type="button" disabled>Test MCP output</button>
