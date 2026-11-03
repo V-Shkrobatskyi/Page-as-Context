@@ -62,9 +62,9 @@
 .mcp-content .pairing-actions { justify-content: flex-end; margin-left: auto; }
 .mcp-content .client-name-editor { flex: 1 1 100%; min-width: 0; }
 .mcp-content .client-name-fields { display: flex; align-items: flex-end; gap: 10px; margin-top: 12px; }
-.mcp-content .client-name-editor label { flex: 1; min-width: 0; font-size: .875rem; }
+.mcp-content .client-name-fields > label { flex: 1; min-width: 0; font-size: .875rem; }
 .mcp-content .client-name-fields button { flex: none; }
-.mcp-content .client-name-editor input { display: block; width: 100%; margin-top: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--text); font: inherit; }
+.mcp-content .client-name-fields input[type='text'] { display: block; width: 100%; margin-top: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--text); font: inherit; }
 .mcp-content .output-label { display: block; margin: 16px 0 6px; font-size: .9rem; font-weight: 600; }
 .mcp-content textarea { display: block; width: 100%; min-height: 260px; padding: 12px; resize: vertical; border: 1px solid light-dark(#a5b5ce, #60769a); border-radius: 6px; background: light-dark(#fff, #192333); color: var(--text); font: 13px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; tab-size: 2; }
 .mcp-content textarea::placeholder { color: var(--muted); opacity: 1; }
@@ -79,4 +79,28 @@
   .mcp-content select, .mcp-content textarea { font-size: 16px; }
   .mcp-content .client-row > .action-group { width: 100%; }
   .mcp-content .pairing-actions > button { flex: 0 0 auto; }
+}
+
+.mcp-content input:is([type='text'], [type='url'], [type='password']) { display: block; box-sizing: border-box; width: 100%; min-width: 0; min-height: 36px; margin-top: 6px; padding: 7px 9px; border: 1px solid light-dark(#a5b5ce, #60769a); border-radius: 6px; background: light-dark(#fff, #192333); color: var(--text); font: inherit; }
+.mcp-content .endpoint-grid { grid-template-columns: minmax(0, 1fr); }
+.mcp-content .field-label { display: block; min-width: 0; font-size: .9rem; font-weight: 600; }
+.mcp-content .setup-row { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.mcp-content .setup-row > label { flex: 1 1 240px; }
+.mcp-content .setup-row > button { flex: 0 1 auto; }
+.mcp-content .setup-actions { margin-top: 12px; font-size: .875rem; }
+.mcp-content .connection-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.mcp-content .connection-controls .connection-status { flex: 1 1 180px; min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.mcp-content .connection-controls > .action-group { max-width: 100%; margin-inline-start: auto; justify-content: flex-end; }
+.mcp-content .http-clients-section h3 { margin: 0; font-size: 1rem; }
+.mcp-content .client-action-options { min-width: 0; margin: 16px 0 0; padding: 0; border: 0; }
+.mcp-content .client-action-options legend { margin-bottom: 8px; padding: 0; font-size: .875rem; font-weight: 600; }
+.mcp-content .client-action-choices { display: grid; grid-template-columns: repeat(4, max-content); gap: 10px 24px; }
+.mcp-content .client-action-choices label { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font-size: .875rem; white-space: nowrap; }
+.mcp-content .client-action-choices input[type='checkbox'] { width: 16px; height: 16px; margin: 0; }
+.mcp-content .client-action-save { margin-top: 14px; }
+
+@media (max-width: 600px) {
+  .mcp-content input:is([type='text'], [type='url'], [type='password']) { font-size: 16px; }
+  .mcp-content .setup-row > button { flex: 1 1 auto; min-height: 44px; }
+  .mcp-content .client-action-choices { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
 }

@@ -37,6 +37,14 @@ function cleaned() {
   expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:test');
 }
 
+it('returns the download ID for reveal only after a successful save', async () => {
+  search.mockResolvedValue([{ state: 'complete' }]);
+  const { downloadBlob } = await import('@/src/save-context');
+  await expect(downloadBlob(new Blob(['synthetic config']), 'config.yaml')).resolves.toBe(12);
+  expect(download).toHaveBeenCalledWith({ url: 'blob:test', filename: 'config.yaml', saveAs: true });
+  cleaned();
+});
+
 it.each(['complete', 'interrupted', 'erased'] as const)('finishes and releases resources after %s', async state => {
   const { task } = await start();
   if (state === 'erased') erased.emit(12);

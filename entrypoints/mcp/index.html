@@ -42,6 +42,7 @@
             <li><a href="#access-heading">Access and approval</a></li>
             <li><a href="#context-heading">Context settings</a></li>
             <li><a href="#connection-heading">Helper connection</a></li>
+            <li><a href="#hfs-heading">Local HTTP (HFS)</a></li>
             <li><a href="#source-heading">Selected tab</a></li>
             <li><a href="#clients-heading">Pairing and clients</a></li>
             <li><a href="#test-heading">Test MCP output</a></li>
@@ -53,6 +54,7 @@
             <li><a href="#access-heading">Access and approval</a></li>
             <li><a href="#context-heading">Context settings</a></li>
             <li><a href="#connection-heading">Helper connection</a></li>
+            <li><a href="#hfs-heading">Local HTTP (HFS)</a></li>
             <li><a href="#source-heading">Selected tab</a></li>
             <li><a href="#clients-heading">Pairing and clients</a></li>
             <li><a href="#test-heading">Test MCP output</a></li>
@@ -118,10 +120,18 @@
       <section class="mcp-section" aria-labelledby="connection-heading">
         <h2 id="connection-heading">Helper connection</h2>
         <div class="settings-panel">
-          <p id="transport" class="connection-status">Checking helper…</p>
-          <div class="action-group">
-            <button id="start" class="primary-action" type="button" disabled>Start helper connection</button>
-            <button id="refresh" type="button">Refresh status</button><button id="pause" type="button">Pause all</button>
+          <label class="check-option"><input id="native-enabled" type="checkbox" form="preferences" checked /><span>Enable native helper connections</span></label>
+          <p class="note">For the existing ChatGPT and Claude plugins.</p>
+          <div class="apply-bar">
+            <button type="submit" form="preferences" id="apply-native" class="primary-action">Apply settings</button>
+            <span id="draft-state-native" class="note" role="status">Applied</span>
+          </div>
+          <div class="connection-controls">
+            <p id="transport" class="connection-status" role="status">Checking helper…</p>
+            <div class="action-group">
+              <button id="start" class="primary-action" type="button" disabled>Start helper connection</button>
+              <button id="refresh" type="button">Refresh status</button><button id="pause" type="button">Pause all</button>
+            </div>
           </div>
           <details class="connection-details">
             <summary>Setup and browser instance</summary>
@@ -131,6 +141,59 @@
         </div>
       </section>
 
+      <section class="mcp-section" aria-labelledby="hfs-heading">
+        <h2 id="hfs-heading">Local HTTP (HFS)</h2>
+        <p class="section-description">Connect an AI app using local HTTP MCP.</p>
+        <div class="settings-panel">
+          <label class="check-option"><input id="hfs-enabled" type="checkbox" form="preferences" /><span>Enable Local HTTP (HFS)</span></label>
+          <div class="settings-grid endpoint-grid">
+            <label for="hfs-endpoint">Local endpoint<input id="hfs-endpoint" type="url" form="preferences" value="http://127.0.0.1:39861" required aria-describedby="hfs-endpoint-note" /></label>
+          </div>
+          <p id="hfs-endpoint-note" class="note">Use 127.0.0.1 and a fixed port. Native helper connections can stay enabled alongside HTTP.</p>
+          <div class="apply-bar">
+            <button type="submit" form="preferences" id="apply-hfs" class="primary-action">Apply settings</button>
+            <span id="draft-state-hfs" class="note" role="status">Applied</span>
+          </div>
+          <div class="connection-controls">
+            <p id="hfs-status" class="connection-status" role="status">HFS: disconnected</p>
+            <div class="action-group">
+              <button id="hfs-retry" type="button">Retry HFS</button>
+              <button id="hfs-stop" type="button">Stop HFS connection</button>
+            </div>
+          </div>
+          <div class="connection-details">
+            <div class="action-group setup-actions">
+              <button id="hfs-generate" type="button" disabled>Download HFS setup files</button>
+              <button id="hfs-show-config" type="button" disabled>Show configuration in folder</button>
+              <a href="https://github.com/V-Shkrobatskyi/Page-as-Context/blob/main/docs/hfs-integration.md" target="_blank" rel="noopener noreferrer">Setup instructions ↗</a>
+            </div>
+            <p class="note">Save config.yaml and the launcher beside HFS in a private local folder. You can download them again without changing client keys.</p>
+          </div>
+          <div id="hfs-http-clients" class="connection-details http-clients-section">
+            <h3>HTTP clients</h3>
+            <p class="note">Create a separate client for each AI app. Adding a client does not download files.</p>
+            <div class="setup-row">
+              <label class="field-label" for="hfs-client-name">AI client name<input id="hfs-client-name" type="text" maxlength="80" value="My AI app" /></label>
+              <button id="hfs-add-client" type="button" class="primary-action">Add client</button>
+            </div>
+            <p class="note">Add client authorizes its key immediately. Keep copied credentials and optional JSON exports private. Revoke removes its access.</p>
+            <p class="note">HTTP header name: <code>Authorization</code>. Use <strong>Copy Authorization</strong> for the value, including the <code>Bearer</code> prefix.</p>
+            <div id="http-clients"></div>
+          </div>
+          <details class="connection-details">
+            <summary>Advanced setup and reset</summary>
+            <p class="note">Join an existing HFS installation using its endpoint and provider secret.</p>
+            <div class="setup-row">
+              <label class="field-label" for="hfs-provider-secret">Provider secret<input id="hfs-provider-secret" type="password" autocomplete="off" spellcheck="false" /></label>
+              <button id="hfs-import" type="button">Join installation</button>
+            </div>
+            <div class="connection-details">
+              <p class="note">Reset removes this browser's HTTP clients and provider secret. Remove or update the old HFS config separately.</p>
+              <div class="action-group setup-actions"><button id="hfs-reset" type="button">Reset HFS secrets and clients</button></div>
+            </div>
+          </details>
+        </div>
+      </section>
       <section class="mcp-section" aria-labelledby="source-heading">
         <h2 id="source-heading">Selected tab</h2>
         <div class="settings-panel">
@@ -164,7 +227,7 @@
           <h3>Approved clients</h3>
           <p class="note">Choose a client to connect the selected tab, or revoke its access. Revoke removes only that client's approval and connections; the helper and other clients stay connected.</p>
           <p id="connection-mode-note" class="note">Connecting a tab grants access in the applied mode shown on the button. Changing settings alone does not connect a tab.</p>
-          <div id="clients"><p class="empty-state">No approved clients yet. Pair a client through the helper to get started.</p></div>
+          <div id="clients"><p class="empty-state">No approved clients yet. Pair a native helper client or create an HTTP client to get started.</p></div>
         </div>
       </section>
 

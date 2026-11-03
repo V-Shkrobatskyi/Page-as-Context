@@ -13,11 +13,11 @@ import { contextBlob, contextDownloadOptions } from './download-context';
 export async function saveContextFile(content: string, format: SupportedExportFormat, signal?: AbortSignal, context?: PolicyContext): Promise<void> {
   await checkPolicy('save', context);
   if (context && context.format !== format) throw new PolicyError('Export format does not match the prepared context. Prepare the context again.');
-  return downloadBlob(contextBlob(content, format), contextDownloadOptions('', format).filename, signal, context?.operationId);
+  await downloadBlob(contextBlob(content, format), contextDownloadOptions('', format).filename, signal, context?.operationId);
 }
 
 /** Own the blob and listeners until a download completes, fails or is cancelled. */
-export async function downloadBlob(blob: Blob, filename: string, signal?: AbortSignal, operation?: string): Promise<void> {
+export async function downloadBlob(blob: Blob, filename: string, signal?: AbortSignal, operation?: string): Promise<number> {
   if (signal?.aborted) throw new DownloadCancelledError();
   const url = URL.createObjectURL(blob);
   let changed: Parameters<typeof browser.downloads.onChanged.addListener>[0] | undefined;
@@ -47,6 +47,7 @@ export async function downloadBlob(blob: Blob, filename: string, signal?: AbortS
       }, reject);
     }), cancelled]);
     technicalEvent({ code: 'download-complete', result: 'success', operation });
+    return id;
   } catch (error) {
     const wasCancelled = isDownloadCancellation(error);
     technicalEvent({ code: 'download-complete', result: 'error', reason: wasCancelled ? 'cancelled' : 'failed', operation });
