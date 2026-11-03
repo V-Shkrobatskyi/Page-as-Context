@@ -18,8 +18,10 @@ restrictions migrate without expanding permissions.
 
 In Automatic, choose Read in a source tab popup even before a client connects.
 The selected access and arrow color remain visible while waiting for a client.
-Each new client must complete one-time code comparison and approval in MCP
-settings. Automatic opens the Pairing and clients section in an active browser
+Each new Native helper client must complete one-time code comparison and approval
+in MCP settings. For Local HTTP, **Add client** authorizes its key without a pairing
+code or mandatory export; a new HTTP client receives at most Read until a new
+explicit Write choice. See [HFS setup](hfs-integration.md). Automatic opens the Pairing and clients section in an active browser
 tab for a new request, reusing its pairing tab for later requests. Repeated
 polling of the same request does not open more tabs. The popup only shows a
 pending indicator; use its MCP footer link to reopen settings if needed. Approval gives that client
@@ -347,3 +349,11 @@ a supported AI application, and the complete install → pair → read → appro
 write → revoke → uninstall path. No model answer-quality benchmark or untested
 OS/client combination is presented as release validation. Store names and
 extension IDs remain unchanged.
+
+## Optional Local HTTP transport
+
+Version 2.2.0 adds opt-in HTTP through a dedicated local HFS 3.3.4
+installation. Native remains available; existing settings do not enable HTTP.
+Both routes use the same browser policy, privacy filters, tab grants and action
+approvals. HTTP diagnostics show connection state without secrets or page metadata.
+See [HFS setup, trust boundary and verification limits](hfs-integration.md).

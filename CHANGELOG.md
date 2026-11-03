@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.2.0 — unreleased
+
+- Show a live HFS lease retry countdown using the background retry deadline, without restarting it on settings refresh or blocking Native helper controls. Refresh status automatically when the wait ends and while HFS reconnects.
+
+- Serialize first-time browser identity initialization and retry failed persistence; send explicitly empty HTTP 202/204 replies through HFS and accept SDK DELETE requests without a POST-only Accept requirement.
+
+- Show the saved client addition date beside Client ID in Approved clients; preserve older clients without inventing historical dates.
+
+- Recover HTTP MCP reconnects at session capacity by replacing only the same credential's least recently used idle session; preserve active requests and other clients.
+- Add HTTP client Copy URL and Copy Authorization controls; keep credentials out of the settings display and shorten Export config / Revoke labels.
+- Group Local HTTP setup, connection settings and clients in one consistent panel; match existing form styles and collapse advanced controls.
+
+- Add an opt-in Local HTTP (HFS) transport alongside Native Messaging, with a shared execution controller and independent route leases.
+- Generate a private HFS YAML from tracked relay source; authenticate providers with replay-protected HMAC and isolate client/profile/session routing and cancellation.
+- Separate HFS setup downloads (YAML and OS launcher) from Add client, which immediately authorizes a new key without downloading files. Support copying connection details or optional JSON export; retain native pairing, explicit legacy HTTP authorization, revoke, JSON-only MCP sessions and per-client action restrictions.
+- Keep HTTP tool discovery stable across Read/Write changes, enforcing current permissions and action approval on every invocation.
+- Download HFS YAML and an OS-specific launcher independently of clients; resume a cancelled launcher save without downloading YAML again. Linux startup remains unverified.
+- Add narrow optional loopback access for Chrome, transport-aware consent, managed transport/endpoint controls, and HTTP trust/setup documentation.
+- Manually verify Chrome/Firefox HTTP reads and actions on macOS and Windows 10 x64, Antigravity reads and actions, and Goose/Ollama/Llama reads with explicit connection IDs. Linux startup, broader lifecycle recovery and reliable local-model tool chaining remain unverified.
+
 ## 2.1.0 — unreleased
 
 - Resolve shared-tab metadata with Chrome's existing debugger API after activeTab access ends, without requesting extra tabs/host permissions or exposing unshared targets.

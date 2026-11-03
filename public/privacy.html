@@ -92,7 +92,11 @@ SPDX-License-Identifier: GPL-3.0-only
     </nav>
     <main class="page-main prose">
       <h1>Privacy policy for Page as Context</h1>
-      <p>Last updated: 2026-10-29. Applies to version 2.1.0.</p>
+      <p>Last updated: 2026-11-01. Applies to version 2.2.0.</p>
+      <h2>Optional Local HTTP (HFS)</h2>
+      <p>Local HTTP is separately opt-in and defaults off. It relays authorized MCP requests and sanitized results through a dedicated HFS process on 127.0.0.1 and the saved port. HFS and the generated executable JavaScript in config.yaml are trusted local components and can see relayed credentials and content. The extension never downloads or executes JavaScript from HFS responses.</p>
+      <p>Provider secrets, independent client secrets and names are stored in browser-local extension storage. Private YAML contains the provider secret; client exports contain only their own bearer. Revoke/reset remove browser state; remove exported files, HFS config, backups and AI-client settings separately. HFS creates runtime files, but the relay never persists page queues or request/response content. Generated config disables access/error logs; process output needs separate retention controls. Diagnostics exclude secrets, headers, titles and URLs. Firefox transmission consent also applies to HTTP. The AI client may forward results under its provider policies.</p>
+      <p>Optional loopback site access permits HFS only; runtime validation separately enforces the saved port. Native Messaging remains a separate optional permission.</p>
 
       <section aria-labelledby="processing">
         <h2 id="processing">Information and local processing</h2>

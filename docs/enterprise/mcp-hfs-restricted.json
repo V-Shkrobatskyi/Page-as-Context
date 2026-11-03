@@ -1,0 +1,13 @@
+{
+  "PolicyVersion": 1,
+  "McpAllowed": true,
+  "McpAllowedTransports": [
+    "hfs"
+  ],
+  "McpHfsEndpoint": "http://127.0.0.1:39861",
+  "McpAllowedModes": [
+    "read-only"
+  ],
+  "McpAllowedActions": [],
+  "McpWriteApproval": "each-action"
+}
