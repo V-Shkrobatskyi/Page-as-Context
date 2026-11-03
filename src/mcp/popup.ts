@@ -20,10 +20,12 @@ export function installMcpPopup() {
     if (!result?.ok) throw new Error(result?.code === 'not-connected' ? 'The bridge is connecting. Try again when it is connected.' : result?.code === 'permission-required' ? 'Browser permission is required.' : 'AI access is unavailable. Check the page, connection and organization policy.');
     return result;
   }
+  let aiTransports: { nativeEnabled?: boolean; hfs?: { enabled: boolean; endpoint: string } } | undefined;
   async function loadAi() {
     try {
       const state = await aiRequest('popup-read'); if (aiDisposed || aiBusy) return;
       aiSourceId = state.sourceId;
+      aiTransports = state.transports;
       const automaticAccess = state.enabled && state.automatic;
       mcpConnect!.hidden = automaticAccess;
       aiControl.hidden = !automaticAccess;
@@ -62,7 +64,7 @@ export function installMcpPopup() {
   for (const button of [previous, next]) button.addEventListener('click', () => void runAi(async () => {
     const mode = button.dataset.ai, sourceId = aiSourceId;
     if (!mode) return;
-    if (mode !== 'off' && !await requestMcpPermissions(mode === 'write')) throw new Error('Browser permission was not granted.');
+    if (mode !== 'off' && !await requestMcpPermissions(mode === 'write', aiTransports)) throw new Error('Browser permission was not granted.');
     await aiRequest('share', { mode, sourceId });
   }));
   const aiChanged = (message: unknown, sender: Browser.runtime.MessageSender) => {

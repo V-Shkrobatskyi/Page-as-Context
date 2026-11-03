@@ -30,7 +30,7 @@ export function browserManifest(target: string): UserManifest {
         },
         gecko_android: { strict_min_version: '142.0' },
       },
-    } : { optional_permissions: ['nativeMessaging'] }),
+    } : { optional_permissions: ['nativeMessaging'], optional_host_permissions: ['http://127.0.0.1/*'] }),
     icons: {
       16: 'icon/16.png',
       32: 'icon/32.png',

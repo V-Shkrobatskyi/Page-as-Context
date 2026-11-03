@@ -29,12 +29,18 @@ export default defineConfig({
     includeSources: [
       'package.json', 'package-lock.json', 'wxt.config.ts', 'tsconfig.json', 'vitest.config.ts',
       'README.md', 'CONTRIBUTING.md', 'LICENSE', 'LICENSING.md', 'BUILDING.md', 'CHANGELOG.md', 'PRIVACY.md', '.nvmrc',
+      'helper/src/catalog.mjs', 'helper/src/catalog.d.mts', 'integrations/hfs/**',
       'entrypoints/**', 'src/**', 'public/**', 'scripts/**', 'tests/fixtures/**',
-      'tests/helpers/**', 'tests/manual/**', 'tests/performance/**', 'docs/**',
+      'tests/mcp/**', 'tests/helpers/**', 'tests/manual/**', 'tests/performance/**', 'docs/**',
     ],
     excludeSources: ['**/dev_notes/**', '**/.env*', '**/node_modules/**', '**/.DS_Store', '**/*.log'],
   },
   hooks: {
+    'zip:start': (wxt) => {
+      // WXT excludes test modules by default; the explicit MCP test allowlist is
+      // needed to reproduce check:hfs from the reviewer source archive.
+      wxt.config.zip.excludeSources = wxt.config.zip.excludeSources.filter(pattern => pattern !== '**/*.+(test|spec).?(c|m)+(j|t)s?(x)');
+    },
     'build:done': async (wxt) => {
       await copyFile(join(wxt.config.root, 'LICENSE'), join(wxt.config.outDir, 'LICENSE'));
       const licensePage = await readFile(join(wxt.config.root, 'public/license.html'), 'utf8');

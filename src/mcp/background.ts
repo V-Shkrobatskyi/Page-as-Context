@@ -12,27 +12,51 @@ import { technicalEvent } from '../diagnostics/client';
 import { redactSemanticTree } from '../core/privacy/redact';
 import { MCP_STATE_CHANGED } from './ui-events';
 import { getMcpTab, McpTabMetadataUnavailable } from './tab';
+import { nativeTransport } from './transports/native';
+import { hfsTransport, type HfsTransport } from './transports/hfs';
+import type { ExecutionRequest, ExecutionTransport, TransportKind, TransportEvents } from './transport';
+import { HFS_STATE_KEY, readInstallation, saveInstallation, validateInstallation, clientSecret, type HttpClientProfile, type HfsInstallation } from './hfs-state';
+import { hfsPermission, DEFAULT_HFS_ENDPOINT, validateHfsEndpoint } from './hfs-settings';
+import { createAuthentication } from '../../integrations/hfs/auth.mjs';
+import { generateHfsConfiguration } from '../../integrations/hfs/config';
+import { MCP_ACTIONS, type McpAction } from './policy';
 
 const INSTANCE_KEY = 'mcp-instance-v1', CLIENTS_KEY = 'mcp-clients-v1', PAUSE_KEY = 'mcp-paused-v1';
+const HFS_RETRY_ALARM = 'mcp-hfs-reconnect';
 const RETRY_ALARM = 'mcp-reconnect', EXPIRY_ALARM = 'mcp-expiry';
 const UNLIMITED_EXPIRY = 8640000000000000;
 const validId = (value: unknown): value is string => typeof value === 'string' && /^[a-zA-Z0-9_-]{16,80}$/u.test(value);
 const digest = async (text: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))), byte => byte.toString(16).padStart(2, '0')).join('');
 const validName = (value: unknown): value is string => typeof value === 'string' && value.trim() === value && value.length > 0 && value.length <= 80 && !/[\p{Cc}\p{Cf}]/u.test(value);
-interface Client { id: string; hash: string; name?: string; shared?: boolean }
+interface Client { id: string; hash: string; addedAt?: number; name?: string; shared?: boolean; transport?: TransportKind; actions?: McpAction[] }
 function validateClients(value: unknown): Client[] {
-  if (!Array.isArray(value) || value.length > 32 || value.some(client => !client || !validId(client.id) || client.shared !== undefined && typeof client.shared !== 'boolean' || typeof client.hash !== 'string' || !/^[a-f0-9]{64}$/u.test(client.hash) || client.name !== undefined && !validName(client.name)) ||
+  if (!Array.isArray(value) || value.length > 32 || value.some(client => !client || !validId(client.id) || client.addedAt !== undefined && (!Number.isSafeInteger(client.addedAt) || client.addedAt <= 0 || client.addedAt > 8640000000000000) || client.transport !== undefined && !['native', 'hfs'].includes(client.transport) || client.actions !== undefined && (!Array.isArray(client.actions) || client.actions.length > 4 || new Set(client.actions).size !== client.actions.length || client.actions.some((action: unknown) => !MCP_ACTIONS.includes(action as McpAction))) || client.shared !== undefined && typeof client.shared !== 'boolean' || typeof client.hash !== 'string' || !/^[a-f0-9]{64}$/u.test(client.hash) || client.name !== undefined && !validName(client.name)) ||
     new Set(value.map(client => client.id)).size !== value.length) throw new Error('invalid-clients');
   return value;
 }
-interface Grant { id: string; clientId: string; clientHash: string; tabId: number; origin: string; expires: number; revision: string; write: boolean; sessionApproval: boolean; busy?: boolean }
+interface Grant { transport?: TransportKind; lease?: string; id: string; clientId: string; clientHash: string; tabId: number; origin: string; expires: number; revision: string; write: boolean; sessionApproval: boolean; busy?: boolean }
 interface Share { ref: string; tabId: number; origin: string; url: string; expires: number; revision: string; write: boolean; idleMs: number; hardExpires: number; loading?: boolean }
 interface Source { tabId: number; url: string; expires: number }
-interface NativeRequest { type: 'request'; id: string; instanceId: string; browser: string; credentialId: string; credentialSecret: string; request: { tool: string; arguments?: Record<string, unknown> } }
+type NativeRequest = ExecutionRequest;
 
 /** Owns browser-session sharing intent and credential-bound execution grants. */
 export function createMcpController() {
-  let port: Browser.runtime.Port | undefined, instance: string | undefined, transport = 'disconnected';
+  let instance: string | undefined, transport = 'disconnected';
+  const routes = new Map<TransportKind, ExecutionTransport>();
+  const starting = new Map<TransportKind, Promise<void>>();
+  const startAbort = new Map<TransportKind, AbortController>();
+  const routeEpochs = { native: 0, hfs: 0 };
+  const routeReadOnly = new Set<TransportKind>();
+  let hfsStopped = false;
+  let nativeState = 'disconnected', hfsState = 'disconnected', hfsRetries = 0;
+  let hfsLeaseRetryAt = 0;
+  const reconnectReadOnly = new Set<string>();
+  const clientKind = (client: Client): TransportKind => client.transport ?? 'native';
+  const routeLive = (request: ExecutionRequest) => {
+    const route = routes.get(request.route ?? 'native');
+    return !!route?.ready && (request.lease === undefined || request.lease === route.lease);
+  };
+  const aggregateTransport = () => { transport = [...routes.values()].some(route => route.ready) ? 'ready' : routes.size ? 'connecting' : nativeState !== 'disconnected' ? nativeState : hfsState; };
   const shares = new Map<number, Share>();
   const tabEpochs = new Map<number, number>();
   const pendingTabs = new Map<string, number>();
@@ -40,7 +64,7 @@ export function createMcpController() {
   let expiryTimer: ReturnType<typeof setTimeout> | undefined;
   const sources = new Map<string, Source>(), grants = new Map<string, Grant>(), pending = new Map<string, AbortController>();
   const deniedPairing = new Map<string, { hash: string; expires: number }>();
-  const pairing = new Map<string, { id: string; hash: string; code: string; expires: number; name?: string }>();
+  const pairing = new Map<string, { id: string; hash: string; code: string; expires: number; name?: string; transport?: TransportKind }>();
   const snapshots = new Map<string, ActionSnapshot>(), ledger = new OperationLedger();
   const busyTabs = new Set<number>();
   const pendingClients = new Map<string, string>();
@@ -74,10 +98,11 @@ export function createMcpController() {
       schedulePairingExpiry(); notifyUi();
     }, Math.max(1, expires - Date.now()));
   };
-  const notifyTools = (clientId: string) => { try { port?.postMessage({ type: 'tools-changed', credentialId: clientId }); } catch { /* Disconnect invalidates live grants. */ } };
+  const notifyTools = (clientId: string) => { try { for (const route of routes.values()) route.toolsChanged(clientId); } catch { /* Disconnect invalidates live grants. */ } };
   const disposeSnapshot = (owner: string) => { snapshots.get(owner)?.dispose(); snapshots.delete(owner); };
   const revokeClientAccess = (clientId: string) => {
     clientRegistryRevision++;
+    (routes.get('hfs') as HfsTransport | undefined)?.revoke(clientId);
     for (const [id, grant] of grants) if (grant.clientId === clientId) {
       grants.delete(id); disposeSnapshot(id); ledger.clearGrant(id);
     }
@@ -88,19 +113,28 @@ export function createMcpController() {
   const invalidate = () => { generation++; const clients = new Set([...grants.values()].map(grant => grant.clientId)); grants.clear(); for (const client of clients) notifyTools(client); for (const controller of pending.values()) controller.abort(); pending.clear();
     for (const snapshot of snapshots.values()) snapshot.dispose(); snapshots.clear();
     for (const approval of [...approvals.values()]) approval.answer(false); ledger.clear(); };
-  const stop = () => { deniedPairing.clear(); halted = true; retries = 0; void browser.alarms?.clear(RETRY_ALARM); shares.clear(); clearTimeout(expiryTimer); void browser.alarms?.clear(EXPIRY_ALARM); invalidate(); pairing.clear(); schedulePairingExpiry(); sources.clear(); const previous = port; port = undefined; transport = 'disconnected'; previous?.disconnect(); notifyUi(); };
+  const stop = () => { for (const abort of startAbort.values()) abort.abort(); startAbort.clear(); for (const route of routes.values()) route.close(); routes.clear(); starting.clear(); nativeState = hfsState = 'disconnected'; hfsRetries = 0; void browser.alarms?.clear(HFS_RETRY_ALARM); deniedPairing.clear(); halted = true; retries = 0; void browser.alarms?.clear(RETRY_ALARM); shares.clear(); clearTimeout(expiryTimer); void browser.alarms?.clear(EXPIRY_ALARM); invalidate(); pairing.clear(); schedulePairingExpiry(); sources.clear(); transport = 'disconnected'; notifyUi(); };
+  let pendingIdentity: Promise<string> | undefined;
   const identity = async () => {
     if (instance) return instance;
-    const stored = await browser.storage.local.get(INSTANCE_KEY);
-    if (stored[INSTANCE_KEY] === undefined) { instance = crypto.randomUUID(); await browser.storage.local.set({ [INSTANCE_KEY]: instance }); }
-    else if (validId(stored[INSTANCE_KEY])) instance = stored[INSTANCE_KEY];
-    else throw new Error('invalid-instance');
-    return instance!;
+    if (!pendingIdentity) pendingIdentity = (async () => {
+      const stored = await browser.storage.local.get(INSTANCE_KEY);
+      const value = stored[INSTANCE_KEY] === undefined ? crypto.randomUUID() : stored[INSTANCE_KEY];
+      if (!validId(value)) throw new Error('invalid-instance');
+      if (stored[INSTANCE_KEY] === undefined) await browser.storage.local.set({ [INSTANCE_KEY]: value });
+      // Publish only a persisted identity; concurrent routes and UI calls share this work.
+      instance = value;
+      return value;
+    })().finally(() => { pendingIdentity = undefined; });
+    return pendingIdentity;
   };
   const clients = async (): Promise<Client[]> => {
     const stored = await browser.storage.local.get(CLIENTS_KEY);
     return validateClients(stored[CLIENTS_KEY] ?? []);
   };
+  const httpClientConfig = async (installation: HfsInstallation, client: HttpClientProfile) => JSON.stringify({ mcpServers: { 'page-as-context-hfs': {
+    url: `${installation.endpoint}/pac/v1/mcp/${await identity()}/${client.id}`, http_headers: { Authorization: `Bearer ${client.secret}` },
+  } } }, null, 2);
   const dropGrant = (grant: Grant) => {
     grants.delete(grant.id); disposeSnapshot(grant.id); ledger.clearGrant(grant.id);
     for (const approval of [...approvals.values()]) if (approval.grant === grant) approval.answer(false);
@@ -172,11 +206,11 @@ export function createMcpController() {
         clearTab(tabId); changed = true;
         if (share.loading) continue;
       }
-      for (const client of known.filter(client => !effective.snapshot.policy.McpAllowedClientIds || effective.snapshot.policy.McpAllowedClientIds.includes(client.id))) {
+      for (const client of known.filter(client => routes.get(clientKind(client))?.ready && (!effective.snapshot.policy.McpAllowedClientIds || effective.snapshot.policy.McpAllowedClientIds.includes(client.id)))) {
         if ([...grants.values()].some(grant => grant.clientId === client.id && grant.tabId === tabId)) continue;
-        const write = share.write && writeConsent && mcpWritesEnabled(effective.settings) && (effective.snapshot.policy.McpAllowedModes ?? ['read-only', 'read-write']).includes('read-write');
+        const write = !routeReadOnly.has(clientKind(client)) && !reconnectReadOnly.has(client.id) && share.write && writeConsent && mcpWritesEnabled(effective.settings) && (effective.snapshot.policy.McpAllowedModes ?? ['read-only', 'read-write']).includes('read-write');
         changed = true; const id = crypto.randomUUID();
-        grants.set(id, { id, clientId: client.id, clientHash: client.hash, tabId, origin: share.origin, expires: share.expires, revision: effective.revision, write,
+        grants.set(id, { transport: clientKind(client), lease: routes.get(clientKind(client))?.lease, id, clientId: client.id, clientHash: client.hash, tabId, origin: share.origin, expires: share.expires, revision: effective.revision, write,
           sessionApproval: false });
         notifyTools(client.id);
       }
@@ -191,31 +225,23 @@ export function createMcpController() {
     const effective = await resolveMcpSettings();
     if (ticket !== generation) return;
     automatic = automaticMcp(effective.settings); notifyUi();
-    if (!automatic || !effective.settings.enabled || halted || port) return;
-    try { await start(); } catch { transport = 'permission-required'; notifyUi(); }
+    if (!automatic || !effective.settings.enabled || halted) return;
+    try { await start(); } catch { aggregateTransport(); notifyUi(); }
   };
   const scheduleReconnect = () => {
     if (!automatic || halted || retries >= 5) return;
     const delay = [1000, 3000, 10000, 30000, 60000][retries++]!;
-    transport = retries === 1 ? 'setup-required' : 'reconnecting';
+    nativeState = retries === 1 ? 'setup-required' : 'reconnecting'; aggregateTransport();
     void browser.alarms?.create(RETRY_ALARM, { when: Date.now() + delay });
-  };
-  const nativeResult = (target: Browser.runtime.Port, id: string, value: unknown) => {
-    const bytes = new TextEncoder().encode(JSON.stringify(value));
-    if (bytes.length > 4 * 1024 * 1024) throw new Error('response-limit');
-    const total = Math.ceil(bytes.length / 65536);
-    for (let index = 0; index < total; index++) {
-      const chunk = bytes.subarray(index * 65536, (index + 1) * 65536);
-      let binary = ''; for (const byte of chunk) binary += String.fromCharCode(byte);
-      target.postMessage({ type: 'result-chunk', id, index, total, data: btoa(binary) });
-    }
   };
   const authorizeClient = async (request: NativeRequest) => {
     const effective = await resolveMcpSettings(); assertAction(effective.snapshot.policy, 'mcp-read');
-    if (paused || halted || transport !== 'ready' || !effective.settings.enabled || !effective.modeAllowed || !await hasMcpTransmissionConsent(!automaticMcp(effective.settings) && effective.settings.mode === 'read-write') || request.instanceId !== await identity() || request.browser !== import.meta.env.BROWSER ||
+    if (paused || halted || !routeLive(request) || !effective.settings.enabled || !effective.modeAllowed || !await hasMcpTransmissionConsent(!automaticMcp(effective.settings) && effective.settings.mode === 'read-write') || request.instanceId !== await identity() || request.browser !== import.meta.env.BROWSER ||
       effective.snapshot.policy.McpAllowedClientIds && !effective.snapshot.policy.McpAllowedClientIds.includes(request.credentialId)) throw new Error('not-connected');
+    if ((request.route ?? 'native') === 'native' ? effective.settings.nativeEnabled === false || !effective.nativeAllowed : !effective.settings.hfs?.enabled || !effective.hfsAllowed) throw new Error('not-connected');
     const client = (await clients()).find(client => client.id === request.credentialId);
-    if (!client || client.hash !== await digest(request.credentialSecret)) throw new Error('not-connected');
+    if ((request.route ?? 'native') === 'hfs' && !(await readInstallation())?.clients.some(profile => profile.id === request.credentialId && profile.secret === request.credentialSecret)) throw new Error('not-connected');
+    if (!client || clientKind(client) !== (request.route ?? 'native') || client.hash !== await digest(request.credentialSecret)) throw new Error('not-connected');
     return { ...effective, clientHash: client.hash, client };
   };
   const requestApproval = (grant: Grant, action: string, target: string, signal: AbortSignal, windowId?: number): Promise<'allowed' | 'approval-denied' | 'approval-timeout' | 'approval-unavailable'> => new Promise(resolve => {
@@ -240,20 +266,22 @@ export function createMcpController() {
     const args = request.request.arguments ?? {};
     if (request.request.tool === 'pair') {
       const effective = await resolveMcpSettings(); assertAction(effective.snapshot.policy, 'mcp-read');
-      if (!effective.settings.enabled || request.instanceId !== await identity() || request.browser !== import.meta.env.BROWSER ||
-        effective.snapshot.policy.UserPreferencesSaveAllowed === false || effective.snapshot.policy.McpSettingsLocked ||
+      if (paused || halted || !routeLive(request) || !effective.settings.enabled || request.instanceId !== await identity() || request.browser !== import.meta.env.BROWSER ||
         effective.snapshot.policy.McpAllowedClientIds && !effective.snapshot.policy.McpAllowedClientIds.includes(request.credentialId) ||
         Object.keys(args).some(key => key !== 'name') || args.name !== undefined && !validName(args.name)) throw new Error('policy-blocked');
+      if ((request.route ?? 'native') === 'native' ? effective.settings.nativeEnabled === false || !effective.nativeAllowed : !effective.settings.hfs?.enabled || !effective.hfsAllowed || !(await readInstallation())?.clients.some(profile => profile.id === request.credentialId && profile.secret === request.credentialSecret)) throw new Error('not-connected');
       const hash = await digest(request.credentialSecret);
       for (const [id, denied] of deniedPairing) if (denied.expires <= Date.now()) deniedPairing.delete(id);
       if (deniedPairing.get(request.credentialId)?.hash === hash) return { status: 'rejected' };
-      if ((await clients()).some(client => client.id === request.credentialId && client.hash === hash)) return { status: 'approved' };
+      if ((await clients()).some(client => client.id === request.credentialId && client.hash === hash && clientKind(client) === (request.route ?? 'native'))) return { status: 'approved' };
+      if (request.route === 'hfs') return { status: 'rejected' };
+      if (effective.snapshot.policy.UserPreferencesSaveAllowed === false || effective.snapshot.policy.McpSettingsLocked) throw new Error('policy-blocked');
       for (const [id, value] of pairing) if (value.expires < Date.now()) pairing.delete(id);
       let value = pairing.get(request.credentialId);
       if (value && value.hash !== hash || !value && pairing.size >= 8) throw new Error('pairing-limit');
       if (!value) {
         const bytes = crypto.getRandomValues(new Uint8Array(4));
-        value = { id: request.credentialId, hash, code: Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase(), expires: Date.now() + 120000,
+        value = { id: request.credentialId, hash, code: Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase(), expires: Date.now() + 120000, transport: request.route ?? 'native',
           ...(typeof args.name === 'string' ? { name: args.name } : {}) };
         pairing.set(request.credentialId, value);
         schedulePairingExpiry(); notifyUi();
@@ -262,10 +290,16 @@ export function createMcpController() {
       return { status: 'pending', code: value.code };
     }
     const effective = await authorizeClient(request);
-    const allowedWrites = Object.entries(WRITE_TOOLS).filter(([, action]) => (effective.snapshot.policy.McpAllowedActions ?? ['click', 'fill', 'select-option', 'set-checked']).includes(action)).map(([tool]) => tool);
+    const allowedWrites = Object.entries(WRITE_TOOLS).filter(([, action]) => (effective.client.actions ?? [...MCP_ACTIONS]).includes(action) && (effective.snapshot.policy.McpAllowedActions ?? ['click', 'fill', 'select-option', 'set-checked']).includes(action)).map(([tool]) => tool);
     const writeAllowed = mcpWritesEnabled(effective.settings) && (effective.snapshot.policy.McpAllowedModes ?? ['read-only', 'read-write']).includes('read-write');
-    if (request.request.tool === 'list-tools') return { tools: ['list_shared_tabs', 'resolve_shared_tab', 'get_connection_status', 'read_page_context',
-      ...(writeAllowed && [...grants.values()].some(grant => grant.clientId === request.credentialId && grant.write && grant.expires > Date.now() && grant.revision === effective.revision) ? allowedWrites : [])] };
+    if (request.request.tool === 'list-tools') {
+      // HTTP hosts may cache this catalog. Tab modes are execution permissions,
+      // not changes to the operations supported by the installed integration.
+      const catalogWrites = request.route === 'hfs'
+        ? (effective.snapshot.policy.McpAllowedModes ?? ['read-only', 'read-write']).includes('read-write')
+        : writeAllowed && [...grants.values()].some(grant => grant.clientId === request.credentialId && grant.write && grant.expires > Date.now() && grant.revision === effective.revision);
+      return { tools: ['list_shared_tabs', 'resolve_shared_tab', 'get_connection_status', 'read_page_context', ...(catalogWrites ? allowedWrites : [])] };
+    }
     if (request.request.tool === 'list_shared_tabs' || request.request.tool === 'resolve_shared_tab') {
       if (Object.keys(args).some(key => !['selector', 'tabRef'].includes(key)) || request.request.tool === 'list_shared_tabs' && Object.keys(args).length ||
         args.selector !== undefined && !['last-focused', 'active-per-window', 'only'].includes(String(args.selector)) || args.tabRef !== undefined && !validId(args.tabRef) || args.selector !== undefined && args.tabRef !== undefined) throw new Error('invalid-request');
@@ -296,7 +330,7 @@ export function createMcpController() {
     if (!validId(args.connectionId) || !isWrite && Object.keys(args).some(key => key !== 'connectionId')) throw new Error('invalid-request');
     const grant = grants.get(args.connectionId);
     const authorize = () => {
-      if (ticket !== generation || controller.signal.aborted || !port || !grant || grants.get(grant.id) !== grant || grant.clientId !== request.credentialId || grant.clientHash !== effective.clientHash ||
+      if (ticket !== generation || controller.signal.aborted || !routeLive(request) || !grant || grant.transport !== (request.route ?? 'native') || grant.lease !== request.lease || grants.get(grant.id) !== grant || grant.clientId !== request.credentialId || grant.clientHash !== effective.clientHash ||
         grant.expires <= Date.now() || grant.revision !== effective.revision) throw new Error('not-connected');
     };
     authorize();
@@ -363,50 +397,114 @@ export function createMcpController() {
     try { const result = await capture(); refreshActivity(); technicalEvent({ code: 'mcp-read', result: 'success' }); return result; }
     finally { grant!.busy = false; busyTabs.delete(grant!.tabId); }
   };
-  const start = async (ticket = generation) => {
-    if (port || ticket !== generation) return;
-    const effective = await resolveMcpSettings(); assertAction(effective.snapshot.policy, 'mcp-read');
-    if (!effective.settings.enabled || !effective.modeAllowed || !await hasMcpTransmissionConsent(!automaticMcp(effective.settings) && effective.settings.mode === 'read-write') || !(await browser.permissions.contains({ permissions: mcpBrowserPermissions() }))) throw new Error('permission-required');
-    if ((await browser.runtime.getPlatformInfo()).os === 'android') throw new Error('unsupported-platform');
-    const instanceId = await identity();
-    // Stop, permission removal or a newer settings change cancels a pending start.
-    if (port || ticket !== generation) return;
-    automatic = automaticMcp(effective.settings);
-    const current = browser.runtime.connectNative('org.page_as_context.bridge'); port = current; transport = 'connecting';
-    notifyUi();
-    const connectionLost = () => { void browser.runtime.lastError; if (port === current) { port = undefined; transport = 'disconnected'; for (const share of shares.values()) share.write = false; invalidate(); pairing.clear(); schedulePairingExpiry(); scheduleReconnect(); notifyUi(); } };
-    current.onDisconnect.addListener(connectionLost);
-    const readiness = setTimeout(() => { if (port === current && transport !== 'ready') { current.disconnect(); connectionLost(); } }, 5000);
-    current.onMessage.addListener((raw: unknown) => {
-      if (port !== current || !raw || typeof raw !== 'object') return;
-      const value = raw as NativeRequest & { protocol?: unknown };
-      if (value.type as string === 'ready' && value.protocol === 1) { clearTimeout(readiness); transport = 'ready'; retries = 0; void browser.alarms?.clear(RETRY_ALARM); void syncShares().catch(() => notifyUi()); notifyUi(); return; }
-      if (value.type as string === 'cancel') { pending.get(value.id)?.abort(); return; }
-      if (value.type as string === 'client-disconnected') {
-        void authorizeClient(value).then(() => {
-          for (const share of shares.values()) share.write = false;
-          for (const [id, grant] of grants) if (grant.clientId === value.credentialId) {
-            grants.delete(id); disposeSnapshot(id);
-            for (const approval of [...approvals.values()]) if (approval.grant === grant) approval.answer(false);
-          }
-          for (const [id, client] of pendingClients) if (client === value.credentialId) pending.get(id)?.abort();
-          notifyUi();
-        }, () => {});
-        return;
+  const scopedId = (kind: TransportKind, lease: string, id: string) => `${kind}:${lease}:${id}`;
+  const runRequest = async (raw: ExecutionRequest): Promise<unknown> => {
+    const kind = raw.route ?? 'native', route = routes.get(kind);
+    if (!route?.ready || raw.lease !== route.lease || halted) throw new Error('not-connected');
+    const id = scopedId(kind, route.lease, raw.id);
+    if (pending.size >= 16 || pending.has(id)) throw new Error('connection-busy');
+    const request = { ...raw, id }, controller = new AbortController(), ticket = generation;
+    pending.set(id, controller); pendingClients.set(id, request.credentialId);
+    const timeout = setTimeout(() => controller.abort(), Object.hasOwn(WRITE_TOOLS, request.request.tool) ? 85000 : 14000);
+    try {
+      const result = await execute(request, controller, ticket);
+      if (ticket !== generation || controller.signal.aborted || !routeLive(request)) throw new Error('not-connected');
+      return result;
+    } catch (error) {
+      if (controller.signal.aborted && Object.hasOwn(WRITE_TOOLS, request.request.tool)) return { operationId: request.request.arguments?.operationId, status: 'outcome-unknown', error: 'outcome-unknown' };
+      const allowed = ['read-only', 'invalid-request', 'operation-id-reused', 'operation-limit', 'connection-busy', 'unsupported-combination', 'response-limit', 'tab-not-shared', 'ambiguous-tab'];
+      return { error: error instanceof Error && allowed.includes(error.message) ? error.message : 'request-rejected' };
+    } finally { clearTimeout(timeout); pending.delete(id); pendingClients.delete(id); pendingTabs.delete(id); }
+  };
+  const syncHttpClients = async () => {
+    const installation = await readInstallation();
+    const clientHashes = await Promise.all((installation?.clients ?? []).map(async client => ({ id: client.id, hash: await digest(client.secret) })));
+    await (routes.get('hfs') as HfsTransport | undefined)?.syncClients(clientHashes);
+    return clientHashes;
+  };
+  const disconnectRoute = (kind: TransportKind, route: ExecutionTransport, reason?: string) => {
+    if (routes.get(kind) !== route) return;
+    routes.delete(kind); route.close();
+    for (const [id, controller] of pending) if (id.startsWith(`${kind}:${route.lease}:`)) controller.abort();
+    routeEpochs[kind]++; routeReadOnly.add(kind);
+    const ownedClients = new Set([...grants.values()].filter(grant => (grant.transport ?? 'native') === kind).map(grant => grant.clientId));
+    for (const clientId of ownedClients) { reconnectReadOnly.add(clientId); revokeClientAccess(clientId); }
+    scheduleExpiry();
+    for (const [id, value] of pairing) if ((value.transport ?? 'native') === kind) pairing.delete(id);
+    schedulePairingExpiry();
+    if (![...routes.values()].some(route => route.ready)) for (const share of shares.values()) share.write = false;
+    if (kind === 'native') { nativeState = 'disconnected'; scheduleReconnect(); }
+    else {
+      hfsState = reason && ['incompatible-relay', 'relay-authentication-failed', 'relay-response-limit'].includes(reason) ? reason : 'hfs-unreachable';
+      if (hfsState === 'hfs-unreachable' && automatic && !halted && !hfsStopped && hfsRetries < 5) void browser.alarms?.create(HFS_RETRY_ALARM, { when: Date.now() + [1000, 3000, 10000, 30000, 65000][hfsRetries++]! });
+    }
+    aggregateTransport(); notifyUi();
+  };
+  const startRoute = (kind: TransportKind, ticket: number): Promise<void> => {
+    if (routes.has(kind)) return Promise.resolve();
+    const existing = starting.get(kind); if (existing) return existing;
+    const epoch = routeEpochs[kind], abort = new AbortController(); startAbort.set(kind, abort);
+    const work = (async () => {
+      const effective = await resolveMcpSettings(); assertAction(effective.snapshot.policy, 'mcp-read');
+      if (kind === 'hfs' && hfsStopped) return;
+      if (kind === 'native' ? effective.settings.nativeEnabled === false || !effective.nativeAllowed : !effective.settings.hfs?.enabled || !effective.hfsAllowed) return;
+      if (!effective.settings.enabled || !effective.modeAllowed || !await hasMcpTransmissionConsent(!automaticMcp(effective.settings) && effective.settings.mode === 'read-write')) throw new Error('permission-required');
+      const permission = kind === 'native' ? { permissions: mcpBrowserPermissions() } : hfsPermission;
+      if (!await browser.permissions.contains(permission)) throw new Error('permission-required');
+      if ((await browser.runtime.getPlatformInfo()).os === 'android') throw new Error('unsupported-platform');
+      const instanceId = await identity();
+      if (ticket !== generation || epoch !== routeEpochs[kind] || halted || routes.has(kind)) return;
+      automatic = automaticMcp(effective.settings);
+      let current: ExecutionTransport | undefined;
+      const events: TransportEvents = {
+        request: runRequest,
+        cancel(id) { if (current) pending.get(scopedId(kind, current.lease, id))?.abort(); },
+        ready() { if (!current || routes.get(kind) !== current) return; if (kind === 'native') { nativeState = 'ready'; retries = 0; void browser.alarms?.clear(RETRY_ALARM); }
+          aggregateTransport(); void syncShares().catch(() => notifyUi()); notifyUi(); },
+        disconnected(reason) { if (current) disconnectRoute(kind, current, reason); },
+        clientDisconnected(clientId, secret) {
+          if (!current) return;
+          const lease = current.lease;
+          void authorizeClient({ type: 'request', id: '', instanceId, browser: import.meta.env.BROWSER, credentialId: clientId, credentialSecret: secret, route: kind, lease, request: { tool: '' } }).then(() => {
+            reconnectReadOnly.add(clientId); revokeClientAccess(clientId);
+            // Preserve the legacy selection behavior when only one route is running.
+            if (routes.size === 1) for (const share of shares.values()) share.write = false;
+            notifyUi();
+          }, () => {});
+        },
+      };
+      if (kind === 'native') current = nativeTransport(instanceId, events);
+      else {
+        const installation = await readInstallation();
+        if (!installation || installation.endpoint !== effective.settings.hfs?.endpoint) throw new Error('hfs-configuration-required');
+        const hashes = await syncHttpClients();
+        if (ticket !== generation || epoch !== routeEpochs[kind] || halted || abort.signal.aborted) return;
+        hfsState = 'connecting'; hfsLeaseRetryAt = 0; aggregateTransport(); notifyUi();
+        current = await hfsTransport(instanceId, installation, hashes, events, browser.runtime.getManifest().version, abort.signal);
       }
-      if (value.type !== 'request' || !validId(value.id) || !validId(value.credentialId) || typeof value.credentialSecret !== 'string' || value.credentialSecret.length !== 43 ||
-        !value.request || typeof value.request.tool !== 'string' || !value.request.arguments || typeof value.request.arguments !== 'object' || Array.isArray(value.request.arguments) ||
-        new TextEncoder().encode(JSON.stringify(value)).length > 65536 || pending.size >= 16 || pending.has(value.id)) { stop(); return; }
-      const controller = new AbortController(), ticket = generation; pending.set(value.id, controller); pendingClients.set(value.id, value.credentialId);
-      const timeout = setTimeout(() => controller.abort(), Object.hasOwn(WRITE_TOOLS, value.request.tool) ? 85000 : 14000);
-      void execute(value, controller, ticket).then(result => {
-        if (port === current && ticket === generation && !controller.signal.aborted) nativeResult(current, value.id, result);
-      }, (error: unknown) => {
-        const allowed = ['read-only', 'invalid-request', 'operation-id-reused', 'operation-limit', 'connection-busy', 'unsupported-combination', 'response-limit', 'tab-not-shared', 'ambiguous-tab'];
-        if (port === current && ticket === generation && !controller.signal.aborted) nativeResult(current, value.id, { error: error instanceof Error && allowed.includes(error.message) ? error.message : 'request-rejected' });
-      }).catch(() => stop()).finally(() => { clearTimeout(timeout); pending.delete(value.id); pendingClients.delete(value.id); pendingTabs.delete(value.id); });
-    });
-    current.postMessage({ type: 'register', protocol: 1, browser: import.meta.env.BROWSER, instanceId });
+      if (ticket !== generation || epoch !== routeEpochs[kind] || halted) { current.close(); return; }
+      routes.set(kind, current);
+      if (kind === 'native') nativeState = current.ready ? 'ready' : 'connecting';
+      else { hfsState = 'ready'; hfsRetries = 0; void browser.alarms?.clear(HFS_RETRY_ALARM); }
+      aggregateTransport(); await syncShares(); notifyUi();
+    })().catch(error => {
+      if (ticket !== generation || epoch !== routeEpochs[kind] || halted) return;
+      const state = error instanceof Error && ['permission-required', 'hfs-configuration-required', 'incompatible-relay', 'relay-authentication-failed', 'provider-already-connected'].includes(error.message) ? error.message : kind === 'hfs' ? 'hfs-unreachable' : 'permission-required';
+      if (kind === 'native') nativeState = automatic ? state : 'disconnected';
+      else {
+        hfsState = state; hfsLeaseRetryAt = state === 'provider-already-connected' ? Date.now() + 45000 : 0;
+        if (automatic && hfsRetries < 5 && ['hfs-unreachable', 'provider-already-connected'].includes(state) && !hfsStopped) {
+          const when = state === 'provider-already-connected' ? hfsLeaseRetryAt : Date.now() + [1000, 3000, 10000, 30000, 65000][hfsRetries]!;
+          hfsRetries++; void browser.alarms?.create(HFS_RETRY_ALARM, { when });
+        } else if (automatic) hfsLeaseRetryAt = 0;
+      }
+      aggregateTransport(); throw error;
+    }).finally(() => { if (starting.get(kind) === work) { starting.delete(kind); startAbort.delete(kind); } });
+    starting.set(kind, work); return work;
+  };
+  const start = async (ticket = generation) => {
+    const results = await Promise.allSettled([startRoute('native', ticket), startRoute('hfs', ticket)]);
+    if (!routes.size && results.some(result => result.status === 'rejected')) throw new Error('permission-required');
   };
   const clearTab = (tabId: number, removed = false) => {
     tabEpochs.set(tabId, (tabEpochs.get(tabId) ?? 0) + 1);
@@ -437,11 +535,23 @@ export function createMcpController() {
   });
   browser.tabs.onActivated?.addListener(() => { void updateIcons(); });
   browser.alarms?.onAlarm.addListener(alarm => {
+    if (alarm.name === HFS_RETRY_ALARM) void recover().catch(() => notifyUi());
     if (alarm.name === RETRY_ALARM) void recover().catch(() => notifyUi());
     if (alarm.name === EXPIRY_ALARM) expire();
   });
-  browser.permissions?.onRemoved?.addListener(() => stop());
+  browser.permissions?.onRemoved?.addListener((removed) => {
+    if (removed.permissions?.includes('nativeMessaging')) { routeEpochs.native++; startAbort.get('native')?.abort(); starting.delete('native'); void browser.alarms?.clear(RETRY_ALARM); nativeState = 'disconnected'; const route = routes.get('native'); if (route) disconnectRoute('native', route); }
+    if (removed.origins?.some(origin => origin.includes('127.0.0.1'))) { hfsLeaseRetryAt = 0; routeEpochs.hfs++; startAbort.get('hfs')?.abort(); starting.delete('hfs'); void browser.alarms?.clear(HFS_RETRY_ALARM); const route = routes.get('hfs'); if (route) disconnectRoute('hfs', route); }
+    aggregateTransport();
+    // Consent or an unrelated capture permission change still fails closed globally.
+    if (!removed.permissions?.includes('nativeMessaging') && !removed.origins?.some(origin => origin.includes('127.0.0.1'))) stop();
+  });
   browser.storage.onChanged?.addListener((changes, area) => {
+    if (area === 'local' && changes[HFS_STATE_KEY]) {
+      const previous = changes[HFS_STATE_KEY].oldValue as HfsInstallation | undefined, next = changes[HFS_STATE_KEY].newValue as HfsInstallation | undefined;
+      if (previous?.providerSecret !== next?.providerSecret || previous?.endpoint !== next?.endpoint) { const route = routes.get('hfs'); if (route) disconnectRoute('hfs', route); }
+      else void syncHttpClients().catch(() => { const route = routes.get('hfs'); if (route) disconnectRoute('hfs', route); });
+    }
     if (area === 'local' && changes[CLIENTS_KEY]) {
       clientRegistryRevision++;
       try {
@@ -449,18 +559,18 @@ export function createMcpController() {
         const next = validateClients(changes[CLIENTS_KEY].newValue ?? []);
         for (const client of previous) {
           const current = next.find(value => value.id === client.id);
-          if (!current || current.hash !== client.hash || current.name !== client.name || current.shared !== client.shared) revokeClientAccess(client.id);
+          if (!current || current.hash !== client.hash || current.name !== client.name || current.shared !== client.shared || current.transport !== client.transport || JSON.stringify(current.actions) !== JSON.stringify(client.actions)) revokeClientAccess(client.id);
         }
       } catch { stop(); }
       void syncShares().catch(() => notifyUi());
     }
     if (area === 'managed' || area === 'local' && ['data-controls-v1', 'capture-sources-v1', 'popup-settings', 'redaction-filters-v1', MCP_SETTINGS_KEY].some(key => key in changes)) {
-      const reconnect = area === 'local' && !!changes[MCP_SETTINGS_KEY] && !!port;
+      const reconnect = area === 'local' && !!changes[MCP_SETTINGS_KEY] && routes.size > 0;
       shares.clear(); invalidate();
       if (area === 'managed' || changes[MCP_SETTINGS_KEY]) {
-        const previous = port; port = undefined; transport = 'disconnected'; previous?.disconnect(); notifyUi();
+        for (const abort of startAbort.values()) abort.abort(); startAbort.clear(); for (const route of routes.values()) route.close(); routes.clear(); starting.clear(); nativeState = hfsState = 'disconnected'; transport = 'disconnected'; notifyUi();
         // One attempt only, with existing permissions. Never restore grants or replay actions.
-        halted = false; retries = 0;
+        halted = false; hfsStopped = false; retries = 0;
         if (reconnect) void start(generation).catch(() => notifyUi());
         else void recover().catch(() => notifyUi());
       }
@@ -500,11 +610,103 @@ export function createMcpController() {
       notifyUi(); return { ok: true };
     }
     if (raw.action === 'revoke' && settingsPage && validId(raw.clientId)) {
+      const installation = await readInstallation();
+      if (installation?.clients.some(client => client.id === raw.clientId)) await saveInstallation({ ...installation, clients: installation.clients.filter(client => client.id !== raw.clientId) });
       await browser.storage.local.set({ [CLIENTS_KEY]: (await clients()).filter(client => client.id !== raw.clientId) });
       revokeClientAccess(raw.clientId); notifyUi(); return { ok: true };
     }
+    if (settingsPage && raw.action === 'hfs-stop') {
+        hfsStopped = true; routeEpochs.hfs++; startAbort.get('hfs')?.abort(); starting.delete('hfs');
+        const route = routes.get('hfs'); if (route) { routes.delete('hfs'); route.close(); for (const client of await clients()) if (clientKind(client) === 'hfs') { reconnectReadOnly.add(client.id); revokeClientAccess(client.id); } }
+        hfsState = 'paused'; hfsRetries = 0; void browser.alarms?.clear(HFS_RETRY_ALARM); aggregateTransport(); notifyUi(); return { ok: true };
+      }
     const effective = await resolveMcpSettings();
     assertAction(effective.snapshot.policy, 'mcp-read');
+    if (settingsPage && raw.action === 'client-actions' && validId(raw.clientId)) {
+      if (effective.snapshot.policy.McpSettingsLocked || effective.snapshot.policy.UserPreferencesSaveAllowed === false) throw new Error('policy-blocked');
+      const known = await clients();
+      if (!known.some(client => client.id === raw.clientId) || !Array.isArray(raw.actions) || raw.actions.length > 4 || new Set(raw.actions).size !== raw.actions.length || raw.actions.some(action => !MCP_ACTIONS.includes(action as McpAction))) throw new Error('invalid-request');
+      await browser.storage.local.set({ [CLIENTS_KEY]: known.map(client => client.id === raw.clientId ? { ...client, actions: raw.actions } : client) });
+      revokeClientAccess(raw.clientId); await syncShares(); notifyUi(); return { ok: true };
+    }
+    if (settingsPage && String(raw.action).startsWith('hfs-')) {
+      if (effective.snapshot.policy.McpSettingsLocked || effective.snapshot.policy.UserPreferencesSaveAllowed === false || !(effective.snapshot.policy.McpAllowedTransports ?? ['native', 'hfs']).includes('hfs')) throw new Error('policy-blocked');
+      let installation = await readInstallation();
+      if (raw.action === 'hfs-retry') { hfsStopped = false; halted = false; hfsRetries = 0; await startRoute('hfs', generation); return { ok: true }; }
+      if (raw.action === 'hfs-reset') {
+        hfsStopped = true; routeEpochs.hfs++; startAbort.get('hfs')?.abort(); starting.delete('hfs'); hfsRetries = 0; void browser.alarms?.clear(HFS_RETRY_ALARM);
+        const route = routes.get('hfs'); if (route) { routes.delete('hfs'); route.close(); }
+        for (const client of await clients()) if (clientKind(client) === 'hfs') revokeClientAccess(client.id);
+        await browser.storage.local.set({ [CLIENTS_KEY]: (await clients()).filter(client => clientKind(client) !== 'hfs'), [HFS_STATE_KEY]: undefined });
+        hfsState = 'hfs-configuration-required'; aggregateTransport(); notifyUi(); return { ok: true };
+      }
+      if (raw.action === 'hfs-import') {
+        if (installation) throw new Error('hfs-configuration-exists');
+        if (typeof raw.providerSecret !== 'string' || !/^[a-f0-9]{64}$/u.test(raw.providerSecret)) throw new Error('invalid-request');
+        const endpoint = validateHfsEndpoint(raw.endpoint);
+        if (effective.snapshot.policy.McpHfsEndpoint && endpoint !== effective.snapshot.policy.McpHfsEndpoint) throw new Error('policy-blocked');
+        await saveInstallation({ version: 1, endpoint, providerSecret: raw.providerSecret, clients: [] }); return { ok: true };
+      }
+      const createClient = raw.action === 'hfs-add-client';
+      if (createClient && !validName(raw.name)) throw new Error('invalid-request');
+      if (raw.action === 'hfs-generate' || createClient) {
+        const endpoint = validateHfsEndpoint(raw.endpoint ?? effective.settings.hfs?.endpoint ?? DEFAULT_HFS_ENDPOINT);
+        if (effective.snapshot.policy.McpHfsEndpoint && endpoint !== effective.snapshot.policy.McpHfsEndpoint) throw new Error('policy-blocked');
+        if (installation && installation.endpoint !== endpoint) throw new Error('hfs-configuration-exists');
+        if (!installation) installation = { version: 1, endpoint, providerSecret: createAuthentication().random(), clients: [] };
+        if (createClient) {
+          const known = await clients();
+          if (installation.clients.length >= 32 || known.length >= 32) throw new Error('invalid-clients');
+          const client = { id: crypto.randomUUID(), name: raw.name as string, secret: clientSecret() };
+          if (effective.snapshot.policy.McpAllowedClientIds && !effective.snapshot.policy.McpAllowedClientIds.includes(client.id)) throw new Error('policy-blocked');
+          // Explicit Add client authorizes the key independently of file downloads.
+          const updates = {
+            [HFS_STATE_KEY]: validateInstallation({ ...installation, clients: [...installation.clients, client] }),
+            [CLIENTS_KEY]: validateClients([...known, { id: client.id, hash: await digest(client.secret), name: client.name, addedAt: Date.now(), transport: 'hfs', shared: false }]),
+          };
+          reconnectReadOnly.add(client.id);
+          try { await browser.storage.local.set(updates); }
+          catch (error) { reconnectReadOnly.delete(client.id); throw error; }
+          await syncHttpClients().catch(() => { const route = routes.get('hfs'); if (route) disconnectRoute('hfs', route); });
+          await syncShares().catch(() => notifyUi());
+          notifyUi();
+          return { ok: true, clientId: client.id };
+        }
+        await saveInstallation(installation);
+        return { ok: true, filename: 'config.yaml', content: generateHfsConfiguration(endpoint, installation.providerSecret) };
+      }
+      if (!installation) throw new Error('hfs-configuration-required');
+      if (raw.action === 'hfs-client-value') {
+        if (effective.snapshot.policy.ClipboardExportAllowed === false) throw new Error('policy-blocked');
+        if (raw.field !== 'url' && raw.field !== 'authorization' || !validId(raw.clientId)) throw new Error('invalid-request');
+        const client = installation.clients.find(value => value.id === raw.clientId);
+        if (!client) throw new Error('invalid-request');
+        if (effective.snapshot.policy.McpAllowedClientIds && !effective.snapshot.policy.McpAllowedClientIds.includes(client.id) ||
+          effective.snapshot.policy.McpHfsEndpoint && effective.snapshot.policy.McpHfsEndpoint !== installation.endpoint) throw new Error('policy-blocked');
+        const approved = (await clients()).find(value => value.id === client.id && clientKind(value) === 'hfs');
+        if (!approved || approved.hash !== await digest(client.secret)) throw new Error('invalid-request');
+        return { ok: true, value: raw.field === 'url' ? `${installation.endpoint}/pac/v1/mcp/${await identity()}/${client.id}` : `Bearer ${client.secret}` };
+      }
+      if (raw.action === 'hfs-export-client' && validId(raw.clientId)) {
+        const client = installation.clients.find(client => client.id === raw.clientId); if (!client) throw new Error('invalid-request');
+        if (effective.snapshot.policy.McpAllowedClientIds && !effective.snapshot.policy.McpAllowedClientIds.includes(client.id)) throw new Error('policy-blocked');
+        const known = await clients(), hash = await digest(client.secret);
+        const approved = known.find(value => value.id === client.id);
+        if (approved && (clientKind(approved) !== 'hfs' || approved.hash !== hash)) throw new Error('invalid-request');
+        const updates: Record<string, unknown> = {};
+        if (!approved) {
+          updates[CLIENTS_KEY] = validateClients([...known, { id: client.id, hash, name: client.name, addedAt: Date.now(), transport: 'hfs', shared: false }]);
+          // New credentials never inherit Write from an already shared tab.
+          reconnectReadOnly.add(client.id);
+        }
+        if (Object.keys(updates).length) await browser.storage.local.set(updates);
+        pairing.delete(client.id); deniedPairing.delete(client.id); schedulePairingExpiry();
+        await syncShares(); notifyTools(client.id); notifyUi();
+        const content = await httpClientConfig(installation, client);
+        return { ok: true, filename: 'page-as-context-hfs-client.json', content };
+      }
+      throw new Error('invalid-request');
+    }
     if (raw.action === 'settings' && popup) {
       const source = validId(raw.sourceId) ? sources.get(raw.sourceId) : undefined;
       const fragment = source && source.expires > Date.now() ? '#' + raw.sourceId : '';
@@ -522,7 +724,7 @@ export function createMcpController() {
         if (!sourceId) { if (sources.size >= 16) { for (const [id, source] of sources) if (source.expires <= Date.now()) { sources.delete(id); disposeSnapshot('preview-' + id); } }
           if (sources.size < 16) { sourceId = crypto.randomUUID(); sources.set(sourceId, { tabId: tab.id, url: tab.url, expires: Date.now() + 30 * 60000 }); } }
       }
-      return { ok: true, sourceId, automatic: automaticMcp(effective.settings), enabled: effective.settings.enabled, transport, paused,
+      return { ok: true, sourceId, transports: { nativeEnabled: effective.settings.nativeEnabled, hfs: effective.settings.hfs }, automatic: automaticMcp(effective.settings), enabled: effective.settings.enabled, transport, paused,
         locked: effective.snapshot.policy.McpSettingsLocked === true || effective.snapshot.policy.UserPreferencesSaveAllowed === false,
         mode: selected ?? (live && current.length ? current.some(grant => grant.write) ? 'write' : 'read' : 'off'),
         writeAllowed: mcpWritesEnabled(effective.settings) && (effective.snapshot.policy.McpAllowedModes ?? ['read-only', 'read-write']).includes('read-write'),
@@ -546,12 +748,14 @@ export function createMcpController() {
       if (!await hasMcpTransmissionConsent(write)) throw new Error('permission-required');
       halted = false;
       if (write) await start();
+      const knownClients = await clients();
       const currentTab = await getMcpTab(tab.id);
       const currentSettings = await resolveMcpSettings();
       if (ticket !== generation || epoch !== (tabEpochs.get(tab.id) ?? 0) || registry !== clientRegistryRevision || paused || currentTab.url !== tab.url || currentTab.discarded || currentTab.incognito || effective.revision !== currentSettings.revision) throw new Error('page-changed');
       if (write && transport !== 'ready') throw new Error('not-connected');
       if (!shares.has(tab.id) && shares.size >= 64) throw new Error('sharing-limit');
       clearTab(tab.id);
+      if (write) { for (const kind of routes.keys()) routeReadOnly.delete(kind); for (const client of knownClients) if (routes.get(clientKind(client))?.ready) reconnectReadOnly.delete(client.id); }
       const now = Date.now(), idleMs = autoDisconnectMilliseconds(effective.settings);
       const hardExpires = effective.snapshot.policy.McpMaxSessionMinutes === undefined ? UNLIMITED_EXPIRY : now + effective.snapshot.policy.McpMaxSessionMinutes * 60000;
       shares.set(tab.id, { ref: crypto.randomUUID(), tabId: tab.id, origin: new URL(tab.url).origin, url: tab.url,
@@ -622,6 +826,8 @@ export function createMcpController() {
           })) };
       }));
       return { ok: true, sharedTabs, instanceId: await identity(), browser: import.meta.env.BROWSER, transport, paused,
+      transports: { native: nativeState, hfs: hfsState }, hfsLeaseRetryAt: hfsState === 'provider-already-connected' && !halted && !hfsStopped ? hfsLeaseRetryAt : null, httpClipboardAllowed: effective.snapshot.policy.ClipboardExportAllowed !== false,
+      httpClients: (await readInstallation())?.clients.map(({ id, name }) => ({ id, name, approved: sharedClients.some(client => client.id === id && clientKind(client) === 'hfs') })) ?? [],
       settings: effective.settings, preferences: effective.preferences, revision: effective.revision,
       sessionApprovalAllowed: effective.sessionApprovalAllowed, allowedModes: effective.snapshot.policy.McpAllowedModes ?? ['read-only', 'read-write'],
       locked: effective.snapshot.policy.McpSettingsLocked === true || effective.snapshot.policy.UserPreferencesSaveAllowed === false,
@@ -632,7 +838,7 @@ export function createMcpController() {
       requiredBuiltinFilters: effective.snapshot.policy.RequiredBuiltinFilters ?? [], managedRuleCount: effective.snapshot.policy.ManagedRedactionRules?.length ?? 0,
       testAllowed: effective.snapshot.policy.McpTestAllowed !== false && effective.snapshot.policy.PreviewAllowed !== false,
       copyAllowed: effective.snapshot.policy.ClipboardExportAllowed !== false, saveAllowed: effective.snapshot.policy.FileExportAllowed !== false,
-      clients: (await clients()).map(client => ({ id: client.id, shared: client.shared === true, ...(client.name ? { name: client.name } : {}) })),
+      clients: (await clients()).map(client => ({ id: client.id, ...(client.addedAt !== undefined ? { addedAt: client.addedAt } : {}), transport: clientKind(client), actions: client.actions ?? [...MCP_ACTIONS], shared: client.shared === true, ...(client.name ? { name: client.name } : {}) })),
       pending: [...pairing.values()].filter(value => value.expires > Date.now()).map(value => ({ id: value.id, code: value.code, ...(value.name ? { name: value.name } : {}) })),
       selectedTab: selectedTitle ? { title: selectedTitle } : null, connections };
     }
@@ -645,7 +851,7 @@ export function createMcpController() {
       if (!request || request.expires <= Date.now() || raw.code !== request.code ||
         effective.snapshot.policy.McpAllowedClientIds && !effective.snapshot.policy.McpAllowedClientIds.includes(request.id)) throw new Error('pairing-expired');
       const known = await clients(); if (known.length >= 32) throw new Error('client-limit');
-      await browser.storage.local.set({ [CLIENTS_KEY]: [...known.filter(client => client.id !== request.id), { id: request.id, hash: request.hash, shared: raw.shared === true, ...(request.name ? { name: request.name } : {}) }] });
+      await browser.storage.local.set({ [CLIENTS_KEY]: [...known.filter(client => client.id !== request.id), { id: request.id, hash: request.hash, addedAt: Date.now(), ...(request.transport === 'hfs' ? { transport: 'hfs' as const } : {}), shared: raw.shared === true, ...(request.name ? { name: request.name } : {}) }] });
       pairing.delete(request.id); schedulePairingExpiry(); await syncShares(); notifyUi(); return { ok: true };
     }
     const source = validId(raw.sourceId) ? sources.get(raw.sourceId) : undefined;
@@ -655,13 +861,16 @@ export function createMcpController() {
     if (raw.action === 'connect' && validId(raw.clientId)) {
       const clientRevision = clientRegistryRevision;
       const client = (await clients()).find(client => client.id === raw.clientId);
-      if (!port || transport !== 'ready' || paused || halted || !effective.settings.enabled || !effective.modeAllowed || !client ||
+      if (!routes.get(client ? clientKind(client) : 'native')?.ready || transport !== 'ready' || paused || halted || !effective.settings.enabled || !effective.modeAllowed || !client ||
         clientRevision !== clientRegistryRevision ||
         effective.snapshot.policy.McpAllowedClientIds && !effective.snapshot.policy.McpAllowedClientIds.includes(raw.clientId)) throw new Error('not-connected');
       for (const [id, grant] of grants) if (grant.clientId === raw.clientId && grant.tabId === source.tabId) dropGrant(grant);
+      const ticket = generation, route = routes.get(clientKind(client));
       const write = mcpWritesEnabled(effective.settings) && raw.allowWrite === true;
       if (write) { assertAction(effective.snapshot.policy, 'mcp-write'); if (!await hasMcpTransmissionConsent(true)) throw new Error('permission-required'); }
-      const id = crypto.randomUUID(); grants.set(id, { id, clientId: raw.clientId, clientHash: client.hash, tabId: source.tabId, origin: new URL(source.url).origin,
+      const currentSettings = await resolveMcpSettings();
+      if (ticket !== generation || clientRevision !== clientRegistryRevision || !route?.ready || routes.get(clientKind(client)) !== route || currentSettings.revision !== effective.revision) throw new Error('not-connected');
+      const id = crypto.randomUUID(); grants.set(id, { transport: clientKind(client), lease: routes.get(clientKind(client))?.lease, id, clientId: raw.clientId, clientHash: client.hash, tabId: source.tabId, origin: new URL(source.url).origin,
         expires: Date.now() + (effective.snapshot.policy.McpMaxSessionMinutes ?? 30) * 60000, revision: effective.revision, write,
         sessionApproval: write && effective.settings.writeApproval === 'session' && effective.sessionApprovalAllowed });
       scheduleExpiry(); notifyTools(raw.clientId);
@@ -683,5 +892,14 @@ export function createMcpController() {
     }
     throw new Error('invalid-request');
   };
-  return { ui, stop, initialize: recover, refreshAction: updateIcons };
+  // Setup finalization and registry edits must not overwrite another window's clients.
+  let clientMutationQueue = Promise.resolve();
+  const clientMutations = new Set(['hfs-add-client', 'hfs-reset', 'hfs-import', 'hfs-generate', 'hfs-export-client', 'hfs-client-value', 'revoke', 'client-actions', 'membership', 'rename', 'approve']);
+  const queuedUi: typeof ui = (raw, sender) => {
+    if (!clientMutations.has(String(raw?.action))) return ui(raw, sender);
+    const result = clientMutationQueue.then(() => ui(raw, sender));
+    clientMutationQueue = result.then(() => {}, () => {});
+    return result;
+  };
+  return { ui: queuedUi, stop, initialize: recover, refreshAction: updateIcons };
 }

@@ -1,11 +1,16 @@
 // Copyright (c) 2026 Vitalii Shkrobatskyi
 // SPDX-License-Identifier: GPL-3.0-only
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
-const fixture = vi.hoisted(() => ({ api: {} as any, stored: {} as Record<string, unknown>, capture: vi.fn(), action: vi.fn(), snapshots: [] as any[] }));
+const fixture = vi.hoisted(() => ({ api: {} as any, stored: {} as Record<string, unknown>, capture: vi.fn(), action: vi.fn(), snapshots: [] as any[], http: undefined as any, httpFailure: undefined as Error | undefined }));
 vi.mock('wxt/browser', () => ({ browser: fixture.api }));
 vi.mock('@/src/adapters/capture', () => ({ captureActiveTab: fixture.capture }));
 vi.mock('@/src/adapters/actions/snapshot', () => ({ createActionSnapshot: async (tabId: number, lease: any) => {
   const value = { ...lease, tabId, targets: new Map(), run: fixture.action, dispose: vi.fn() }; fixture.snapshots.push(value); return value;
+} }));
+vi.mock('@/src/mcp/transports/hfs', () => ({ hfsTransport: async (_instance: string, _installation: unknown, _clients: unknown, events: any) => {
+  if (fixture.httpFailure) throw fixture.httpFailure;
+  const route = { kind: 'hfs', lease: crypto.randomUUID(), ready: true, close: vi.fn(), toolsChanged: vi.fn(), syncClients: vi.fn(), revoke: vi.fn() };
+  fixture.http = { instanceId: _instance, events, route }; return route;
 } }));
 import { createMcpController } from '@/src/mcp/background';
 import type { Browser } from 'wxt/browser';
@@ -17,6 +22,7 @@ const popup = { id: 'extension', url: url('/popup.html') };
 let controller: ReturnType<typeof createMcpController>, port: any;
 beforeEach(() => {
   fixture.capture.mockReset();
+  fixture.http = undefined; fixture.httpFailure = undefined;
   fixture.action.mockReset().mockResolvedValue({ status: 'applied' }); fixture.snapshots = [];
   vi.stubEnv('BROWSER', 'chrome');
   fixture.stored = { 'mcp-settings-v1': { version: 1, enabled: true, mode: 'read-only', inherit: true } };
@@ -27,13 +33,66 @@ beforeEach(() => {
       const changes = Object.fromEntries(Object.entries(values).map(([key, newValue]) => [key, { oldValue: fixture.stored[key], newValue }]));
       Object.assign(fixture.stored, values); changed.emit(changes, 'local');
     }),
-  }, onChanged: changed }, runtime: { id: 'extension', getURL: url, getPlatformInfo: vi.fn(async () => ({ os: 'mac' })), connectNative: vi.fn(() => port), sendMessage: vi.fn() },
+  }, onChanged: changed }, runtime: { id: 'extension', getURL: url, getManifest: () => ({ version: '2.2.0' }), getPlatformInfo: vi.fn(async () => ({ os: 'mac' })), connectNative: vi.fn(() => port), sendMessage: vi.fn() },
   permissions: { contains: vi.fn(async () => true), getAll: vi.fn(async () => ({ data_collection: ['websiteContent', 'browsingActivity', 'personalCommunications'] })), request: vi.fn(), onRemoved: event() },
   tabs: { query: vi.fn(async () => [{ id: 7, url: 'https://example.test/' }]), get: vi.fn(async () => ({ id: 7, url: 'https://example.test/' })), create: vi.fn(async () => ({ id: 9 })), remove: vi.fn(async () => {}), onUpdated: event(), onRemoved: event() } });
   fixture.capture.mockResolvedValue({ ok: true, tree: { schemaVersion: 1, root: { role: 'page', children: [{ role: 'button', name: 'Synthetic read result', children: [] }] } } });
   controller = createMcpController();
 });
 afterEach(() => { controller.stop(); vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
+
+it('shares one persisted identity across concurrent settings reads and both transport startups', async () => {
+  enableHttpSettings();
+  const originalGet = fixture.api.storage.local.get.getMockImplementation();
+  const originalSet = fixture.api.storage.local.set.getMockImplementation();
+  let finishRead!: () => void, finishWrite!: () => void;
+  const readGate = new Promise<void>(resolve => { finishRead = resolve; });
+  const writeGate = new Promise<void>(resolve => { finishWrite = resolve; });
+  let identityReads = 0, identityWrites = 0;
+  fixture.api.storage.local.get.mockImplementation(async (key: unknown) => {
+    if (key === 'mcp-instance-v1') { identityReads++; await readGate; }
+    return originalGet(key);
+  });
+  fixture.api.storage.local.set.mockImplementation(async (values: Record<string, unknown>) => {
+    if ('mcp-instance-v1' in values) { identityWrites++; await writeGate; }
+    return originalSet(values);
+  });
+  const starting = controller.ui({ action: 'start' }, page);
+  const reads = [controller.ui({ action: 'read' }, page), controller.ui({ action: 'read' }, page)];
+  await vi.waitFor(() => expect(identityReads).toBeGreaterThan(0));
+  finishRead();
+  await vi.waitFor(() => expect(identityWrites).toBeGreaterThan(0));
+  const duringWrite = controller.ui({ action: 'read' }, page);
+  finishWrite();
+  const states = await Promise.all([...reads, duringWrite]); await starting;
+  expect(identityReads).toBe(1); expect(identityWrites).toBe(1);
+  expect(fixture.http.instanceId).toBe(fixture.stored['mcp-instance-v1']);
+  expect(new Set(states.map(state => state.instanceId))).toEqual(new Set([fixture.stored['mcp-instance-v1']]));
+  expect(port.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'register', instanceId: fixture.stored['mcp-instance-v1'] }));
+});
+it('preserves an existing browser identity without writing a replacement', async () => {
+  fixture.stored['mcp-instance-v1'] = 'existing_instance_001';
+  const states = await Promise.all([controller.ui({ action: 'read' }, page), controller.ui({ action: 'read' }, page)]);
+  expect(states.map(state => state.instanceId)).toEqual(['existing_instance_001', 'existing_instance_001']);
+  expect(fixture.api.storage.local.set.mock.calls.some(([value]: any) => 'mcp-instance-v1' in value)).toBe(false);
+});
+it('retries identity persistence after failure without publishing an unsaved ID', async () => {
+  const originalSet = fixture.api.storage.local.set.getMockImplementation();
+  let attempts = 0;
+  fixture.api.storage.local.set.mockImplementation(async (values: Record<string, unknown>) => {
+    if ('mcp-instance-v1' in values && ++attempts === 1) throw new Error('storage-failed');
+    return originalSet(values);
+  });
+  await expect(controller.ui({ action: 'read' }, page)).rejects.toThrow('storage-failed');
+  expect(fixture.stored['mcp-instance-v1']).toBeUndefined();
+  const state = await controller.ui({ action: 'read' }, page);
+  expect(attempts).toBe(2); expect(state.instanceId).toBe(fixture.stored['mcp-instance-v1']);
+});
+it.each([null, '', 'invalid'])('rejects a malformed saved identity without replacing it: %s', async value => {
+  fixture.stored['mcp-instance-v1'] = value;
+  await expect(controller.ui({ action: 'read' }, page)).rejects.toThrow('invalid-instance');
+  expect(fixture.api.storage.local.set).not.toHaveBeenCalled();
+});
 
 async function call(tool: string, args: Record<string, unknown> = {}, secret = 'a'.repeat(43), clientId = 'synthetic_client_001') {
   const id = crypto.randomUUID();
@@ -156,7 +215,7 @@ it.each(['revoke', 'rename', 'replace-credential'])('isolates %s to one client w
   const state = await controller.ui({ action: 'read' }, page);
   expect(state.transport).toBe('ready');
   expect(state.connections!.map((value: any) => value.id)).toEqual([second.connectionId]);
-  expect(state.clients).toContainEqual({ id: secondId, name: 'Other client', shared: false });
+  expect(state.clients).toContainEqual({ id: secondId, name: 'Other client', addedAt: expect.any(Number), shared: false, transport: 'native', actions: ['click', 'fill', 'select-option', 'set-checked'] });
   if (change === 'revoke') expect(state.clients!.some((client: any) => client.id === 'synthetic_client_001')).toBe(false);
   expect(fixture.snapshots[0].dispose).toHaveBeenCalledOnce();
   expect(port.disconnect).not.toHaveBeenCalled();
@@ -464,7 +523,7 @@ it('keeps client names through approval and returns tab titles only to the local
   const grant = await connect(false, { name: 'ChatGPT — Firefox' });
   const source = await controller.ui({ action: 'source' }, popup);
   const state = await controller.ui({ action: 'read', sourceId: source.sourceId }, page);
-  expect(state.clients).toEqual([{ id: 'synthetic_client_001', name: 'ChatGPT — Firefox', shared: false }]);
+  expect(state.clients).toEqual([{ id: 'synthetic_client_001', name: 'ChatGPT — Firefox', addedAt: expect.any(Number), shared: false, transport: 'native', actions: ['click', 'fill', 'select-option', 'set-checked'] }]);
   expect(state.selectedTab).toEqual({ title: 'Local test tab' });
   expect(state.connections![0]).toMatchObject({ id: grant.connectionId, tabTitle: 'Local test tab' });
   expect(JSON.stringify(fixture.stored)).not.toContain('Local test tab');
@@ -473,6 +532,7 @@ it('keeps client names through approval and returns tab titles only to the local
   await controller.ui({ action: 'rename', clientId: 'synthetic_client_001', name: 'My ChatGPT' }, page);
   expect((await controller.ui({ action: 'read' }, page)).clients![0]!.name).toBe('My ChatGPT');
   expect((fixture.stored['mcp-clients-v1'] as any[])[0].hash).toBe((hash as any[])[0].hash);
+  expect((await controller.ui({ action: 'read' }, page)).clients![0]).toMatchObject({ addedAt: (hash as any[])[0].addedAt });
 });
 
 it('shows a pending client name without treating it as approval or a tab grant', async () => {
@@ -1013,4 +1073,254 @@ it.each(['automatic', 'manual'])('opens the top of MCP settings without capturin
   expect(fixture.api.tabs.query).not.toHaveBeenCalled();
   expect(fixture.capture).not.toHaveBeenCalled();
   expect(fixture.api.permissions.request).not.toHaveBeenCalled();
+});
+
+function enableHttpSettings() {
+  fixture.stored['mcp-hfs-installation-v1'] = { version: 1, endpoint: 'http://127.0.0.1:39861', providerSecret: '1'.repeat(64), clients: [{ id: 'http_client_00000001', secret: 'b'.repeat(43), name: 'HTTP Test' }] };
+  fixture.stored['mcp-settings-v1'] = { ...(fixture.stored['mcp-settings-v1'] as object), hfs: { enabled: true, endpoint: 'http://127.0.0.1:39861' } };
+}
+it('exposes the actual lease retry deadline without extending it on UI reads and clears it on Stop', async () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-11-03T16:00:00Z'));
+  enableHttpSettings();
+  fixture.stored['mcp-settings-v1'] = { ...(fixture.stored['mcp-settings-v1'] as object), nativeEnabled: false, connection: 'automatic' };
+  fixture.httpFailure = new Error('provider-already-connected');
+  const deadline = Date.now() + 45000;
+  await expect(controller.ui({ action: 'hfs-retry' }, page)).rejects.toThrow('provider-already-connected');
+  expect(fixture.api.alarms.create).toHaveBeenCalledWith('mcp-hfs-reconnect', { when: deadline });
+  expect(await controller.ui({ action: 'read' }, page)).toMatchObject({ hfsLeaseRetryAt: deadline });
+  await vi.advanceTimersByTimeAsync(30000);
+  expect(await controller.ui({ action: 'read' }, page)).toMatchObject({ hfsLeaseRetryAt: deadline });
+  await controller.ui({ action: 'hfs-stop' }, page);
+  expect(await controller.ui({ action: 'read' }, page)).toMatchObject({ hfsLeaseRetryAt: null });
+});
+it('returns only the requested HTTP connection value without authorizing or exposing secrets in status', async () => {
+  enableHttpSettings();
+  const request = { action: 'hfs-client-value', clientId: 'http_client_00000001', field: 'authorization' };
+  await expect(controller.ui(request, page)).rejects.toThrow('invalid-request');
+  expect(fixture.stored['mcp-clients-v1'] ?? []).toEqual([]);
+  await controller.ui({ action: 'hfs-export-client', clientId: request.clientId }, page);
+  const before = JSON.stringify(fixture.stored);
+  expect(await controller.ui(request, page)).toEqual({ ok: true, value: 'Bearer ' + 'b'.repeat(43) });
+  const url = await controller.ui({ ...request, field: 'url' }, page);
+  expect(url).toEqual({ ok: true, value: `http://127.0.0.1:39861/pac/v1/mcp/${fixture.stored['mcp-instance-v1']}/${request.clientId}` });
+  expect(JSON.stringify(fixture.stored)).toBe(before);
+  const state = await controller.ui({ action: 'read' }, page);
+  expect(JSON.stringify(state)).not.toContain('b'.repeat(43));
+  expect(JSON.stringify(state)).not.toContain('1'.repeat(64));
+  await expect(controller.ui(request, popup)).rejects.toThrow('invalid-route');
+  await expect(controller.ui({ ...request, field: 'secret' }, page)).rejects.toThrow('invalid-request');
+  await controller.ui({ action: 'revoke', clientId: request.clientId }, page);
+  await expect(controller.ui(request, page)).rejects.toThrow('invalid-request');
+});
+it.each([
+  { ClipboardExportAllowed: false }, { McpSettingsLocked: true },
+  { UserPreferencesSaveAllowed: false }, { McpAllowedClientIds: ['other_client_000001'] },
+  { McpAllowedTransports: ['native'] }, { McpHfsEndpoint: 'http://127.0.0.1:39862' },
+])('blocks HTTP connection copying under managed policy %j', async policy => {
+  enableHttpSettings();
+  await controller.ui({ action: 'hfs-export-client', clientId: 'http_client_00000001' }, page);
+  fixture.api.storage.managed.get.mockResolvedValue(policy);
+  await expect(controller.ui({ action: 'hfs-client-value', clientId: 'http_client_00000001', field: 'authorization' }, page)).rejects.toThrow('policy-blocked');
+});
+async function httpConnect(write = false) {
+  enableHttpSettings();
+  const source = await controller.ui({ action: 'source' }, popup);
+  await controller.ui({ action: 'start' }, page); port.onMessage.emit({ type: 'ready', protocol: 1 });
+  await controller.ui({ action: 'hfs-export-client', clientId: 'http_client_00000001' }, page);
+  expect(await httpCall('pair')).toEqual({ status: 'approved' });
+  return controller.ui({ action: 'connect', sourceId: source.sourceId, clientId: 'http_client_00000001', allowWrite: write }, page);
+}
+async function httpCall(tool: string, args: Record<string, unknown> = {}) {
+  const state = await controller.ui({ action: 'read' }, page);
+  return fixture.http.events.request({ type: 'request', id: crypto.randomUUID(), instanceId: state.instanceId, browser: 'chrome', credentialId: 'http_client_00000001', credentialSecret: 'b'.repeat(43), route: 'hfs', lease: fixture.http.route.lease, request: { tool, arguments: args } });
+}
+it('keeps real capture authorization shared while isolating native and HTTP route loss', async () => {
+  enableHttpSettings(); const native = await connect(); const http = await httpConnect();
+  expect((await httpCall('read_page_context', { connectionId: http.connectionId })).context).toContain('Synthetic read result');
+  fixture.http.events.disconnected();
+  expect(fixture.http.route.close).toHaveBeenCalledOnce();
+  expect((await call('read_page_context', { connectionId: native.connectionId })).context).toContain('Synthetic read result');
+  expect((await controller.ui({ action: 'read' }, page)).transport).toBe('ready');
+});
+it('prevents HTTP credentials from entering the native route and rechecks export-profile revoke', async () => {
+  const http = await httpConnect();
+  expect(await call('read_page_context', { connectionId: http.connectionId }, 'b'.repeat(43), 'http_client_00000001')).toEqual({ error: 'request-rejected' });
+  const installation = fixture.stored['mcp-hfs-installation-v1'] as any;
+  fixture.stored['mcp-hfs-installation-v1'] = { ...installation, clients: [] };
+  expect(await httpCall('read_page_context', { connectionId: http.connectionId })).toEqual({ error: 'request-rejected' });
+});
+it('requests no native port for HTTP-only settings and shares no pages at initialize/pairing', async () => {
+  fixture.stored['mcp-settings-v1'] = { version: 1, enabled: true, nativeEnabled: false, mode: 'read-only', inherit: true };
+  await httpConnect();
+  expect(fixture.api.runtime.connectNative).not.toHaveBeenCalled();
+  expect(fixture.capture).not.toHaveBeenCalled();
+});
+it('enforces per-client action restrictions even with cached tool descriptors', async () => {
+  writeMode(); const grant = await connect(true);
+  await call('read_page_context', { connectionId: grant.connectionId });
+  await controller.ui({ action: 'client-actions', clientId: 'synthetic_client_001', actions: [] }, page);
+  const source = await controller.ui({ action: 'source' }, popup);
+  const current = await controller.ui({ action: 'connect', sourceId: source.sourceId, clientId: 'synthetic_client_001', allowWrite: true }, page);
+  const snapshot = await call('read_page_context', { connectionId: current.connectionId });
+  expect((await call('get_connection_status', { connectionId: current.connectionId })).capabilities).toEqual(['read_page_context']);
+  expect(await call('click_element', { connectionId: current.connectionId, snapshotId: snapshot.snapshotId, elementRef: '11111111-1111-4111-8111-111111111111', operationId: crypto.randomUUID() })).toEqual({ error: 'read-only' });
+  expect(fixture.action).not.toHaveBeenCalled(); expect(fixture.snapshots[0].dispose).toHaveBeenCalled();
+  expect(await call('read_page_context', { connectionId: grant.connectionId })).toEqual({ error: 'request-rejected' });
+});
+it('shares the per-tab lock across transports while one capture is pending', async () => {
+  enableHttpSettings(); const native = await connect(); const http = await httpConnect();
+  let finish!: (value: unknown) => void;
+  fixture.capture.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const pending = httpCall('read_page_context', { connectionId: http.connectionId });
+  await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+  expect(await call('read_page_context', { connectionId: native.connectionId })).toEqual({ error: 'connection-busy' });
+  finish({ ok: true, tree: { schemaVersion: 1, root: { role: 'page', children: [] } } }); await pending;
+});
+it('does not reconnect HTTP after Stop HFS while native remains ready', async () => {
+  enableHttpSettings(); const native = await connect(); await httpConnect();
+  await controller.ui({ action: 'hfs-stop' }, page);
+  await controller.initialize();
+  expect(fixture.http.route.close).toHaveBeenCalledOnce();
+  expect((await controller.ui({ action: 'read' }, page)).transports!.hfs).toBe('paused');
+  expect((await call('read_page_context', { connectionId: native.connectionId })).context).toContain('Synthetic read result');
+});
+
+it('allows an already approved HTTP profile to negotiate under a settings lock without new pairing', async () => {
+  await httpConnect();
+  fixture.api.storage.managed.get.mockResolvedValue({ McpSettingsLocked: true });
+  expect(await httpCall('pair')).toEqual({ status: 'approved' });
+  expect(fixture.capture).not.toHaveBeenCalled();
+});
+
+it('executes an HTTP action only after browser approval and returns the existing operation receipt on retry', async () => {
+  writeMode(); const connection = await httpConnect(true);
+  const snapshot = await httpCall('read_page_context', { connectionId: connection.connectionId });
+  const args = { connectionId: connection.connectionId, snapshotId: snapshot.snapshotId, elementRef: '11111111-1111-4111-8111-111111111111', operationId: crypto.randomUUID() };
+  const pending = httpCall('click_element', args);
+  await vi.waitFor(() => expect(fixture.api.tabs.create.mock.calls.some(([details]: any) => details.url.includes('/mcp-approval.html#'))).toBe(true));
+  expect(fixture.action).not.toHaveBeenCalled();
+  const approval = fixture.api.tabs.create.mock.calls.find(([details]: any) => details.url.includes('/mcp-approval.html#'))![0];
+  await controller.ui({ action: 'approval-answer', allow: true }, { id: 'extension', url: approval.url, tab: { id: 9 } } as Browser.runtime.MessageSender);
+  expect((await pending).status).toBe('applied');
+  expect((await httpCall('click_element', args)).status).toBe('applied');
+  expect(fixture.action).toHaveBeenCalledOnce();
+});
+
+it('creates and approves a client atomically without exporting files or changing the provider key', async () => {
+  const yaml = await controller.ui({ action: 'hfs-generate' }, page) as any;
+  const providerSecret = (fixture.stored['mcp-hfs-installation-v1'] as any).providerSecret;
+  const created = await controller.ui({ action: 'hfs-add-client', name: 'New app' }, page) as any;
+  expect(Object.keys(created).sort()).toEqual(['clientId', 'ok']);
+  const state = await controller.ui({ action: 'read' }, page);
+  expect(state.httpClients).toEqual([{ id: created.clientId, name: 'New app', approved: true }]);
+  const addedAt = (fixture.stored['mcp-clients-v1'] as any[])[0].addedAt;
+  expect(state.clients![0]).toMatchObject({ addedAt });
+  expect(addedAt).toBeTypeOf('number');
+  expect(addedAt).toBeGreaterThan(0);
+  expect(state.pending).toEqual([]); expect(state.connections).toHaveLength(0);
+  expect((fixture.stored['mcp-hfs-installation-v1'] as any).providerSecret).toBe(providerSecret);
+  expect((await controller.ui({ action: 'hfs-generate' }, page) as any).content).toBe(yaml.content);
+  const exported = await controller.ui({ action: 'hfs-export-client', clientId: created.clientId }, page) as any;
+  expect(JSON.parse(exported.content).mcpServers['page-as-context-hfs'].url).toContain('/' + created.clientId);
+  expect((await controller.ui({ action: 'read' }, page)).clients![0]).toMatchObject({ addedAt });
+  expect(fixture.capture).not.toHaveBeenCalled();
+});
+it('setup file generation never creates or authorizes a client', async () => {
+  const first = await controller.ui({ action: 'hfs-generate' }, page);
+  expect(await controller.ui({ action: 'hfs-generate' }, page)).toEqual(first);
+  const state = await controller.ui({ action: 'read' }, page);
+  expect(state.clients).toEqual([]); expect(state.httpClients).toEqual([]);
+});
+it.each(['name', 'endpoint', 'policy'])('rejects invalid client creation %s without saving credentials', async reason => {
+  if (reason === 'policy') fixture.api.storage.managed.get.mockResolvedValue({ McpSettingsLocked: true });
+  await expect(controller.ui({ action: 'hfs-add-client', name: reason === 'name' ? '' : 'Test', endpoint: reason === 'endpoint' ? 'http://example.test:39861' : 'http://127.0.0.1:39861' }, page)).rejects.toThrow();
+  expect(fixture.stored['mcp-hfs-installation-v1']).toBeUndefined();
+});
+
+it('requires explicit export to authorize an older HTTP profile, preserves its secret and supports revoke', async () => {
+  enableHttpSettings();
+  await controller.ui({ action: 'start' }, page); port.onMessage.emit({ type: 'ready', protocol: 1 });
+  expect(await httpCall('pair')).toEqual({ status: 'rejected' });
+  expect((await controller.ui({ action: 'read' }, page)).pending).toEqual([]);
+  const exported = await controller.ui({ action: 'hfs-export-client', clientId: 'http_client_00000001' }, page) as any;
+  expect(JSON.parse(exported.content).mcpServers['page-as-context-hfs'].http_headers.Authorization).toBe('Bearer ' + 'b'.repeat(43));
+  expect(await httpCall('pair')).toEqual({ status: 'approved' });
+  await controller.ui({ action: 'client-actions', clientId: 'http_client_00000001', actions: [] }, page);
+  await controller.ui({ action: 'hfs-export-client', clientId: 'http_client_00000001' }, page);
+  expect((await controller.ui({ action: 'read' }, page)).clients).toMatchObject([{ id: 'http_client_00000001', actions: [] }]);
+  await controller.ui({ action: 'revoke', clientId: 'http_client_00000001' }, page);
+  expect(await httpCall('pair')).toEqual({ error: 'request-rejected' });
+  expect((fixture.stored['mcp-hfs-installation-v1'] as any).clients).toEqual([]);
+});
+it('fails atomically when the approval registry is full', async () => {
+  fixture.stored['mcp-clients-v1'] = Array.from({ length: 32 }, (_, index) => ({ id: 'native_client_' + String(index).padStart(4, '0'), hash: '1'.repeat(64) }));
+  await expect(controller.ui({ action: 'hfs-add-client', name: 'Test', endpoint: 'http://127.0.0.1:39861' }, page)).rejects.toThrow('invalid-clients');
+  expect(fixture.stored['mcp-hfs-installation-v1']).toBeUndefined();
+  expect((fixture.stored['mcp-clients-v1'] as any[])).toHaveLength(32);
+});
+
+it('grants a newly authorized HTTP client Read on an existing Write share until a new explicit Write choice', async () => {
+  await automaticClient(); enableHttpSettings();
+  await controller.ui({ action: 'start' }, page);
+  await share('write');
+  await controller.ui({ action: 'hfs-export-client', clientId: 'http_client_00000001' }, page);
+  expect((await httpCall('list_shared_tabs')).tabs).toMatchObject([{ mode: 'read-only' }]);
+  await share('write');
+  expect((await httpCall('list_shared_tabs')).tabs).toMatchObject([{ mode: 'read-write' }]);
+});
+
+it('keeps HTTP discovery stable across Read and Write while enforcing the current grant and action restrictions', async () => {
+  enableHttpSettings();
+  fixture.stored['mcp-settings-v1'] = { ...(fixture.stored['mcp-settings-v1'] as object), connection: 'automatic' };
+  await controller.ui({ action: 'start' }, page); port.onMessage.emit({ type: 'ready', protocol: 1 });
+  await controller.ui({ action: 'hfs-export-client', clientId: 'http_client_00000001' }, page);
+  const catalog = await httpCall('list-tools');
+  expect(catalog.tools).toContain('fill_element');
+  expect(catalog.tools).toContain('click_element');
+  expect((await httpCall('list_shared_tabs')).tabs).toEqual([]);
+  await share('read');
+  const read = (await httpCall('list_shared_tabs')).tabs[0];
+  expect((await httpCall('get_connection_status', { connectionId: read.connectionId })).capabilities).toEqual(['read_page_context']);
+  expect((await httpCall('click_element', { connectionId: read.connectionId, snapshotId: crypto.randomUUID(), elementRef: crypto.randomUUID(), operationId: crypto.randomUUID() })).error).toBe('read-only');
+  expect(fixture.action).not.toHaveBeenCalled();
+  fixture.stored['mcp-settings-v1'] = { ...(fixture.stored['mcp-settings-v1'] as object), mode: 'read-write' };
+  await share('write');
+  expect(await httpCall('list-tools')).toEqual(catalog);
+  const write = (await httpCall('list_shared_tabs')).tabs[0];
+  expect((await httpCall('get_connection_status', { connectionId: write.connectionId })).capabilities).toContain('fill_element');
+  await controller.ui({ action: 'client-actions', clientId: 'http_client_00000001', actions: ['fill'] }, page);
+  expect((await httpCall('list-tools')).tools).toContain('fill_element');
+  expect((await httpCall('list-tools')).tools).not.toContain('click_element');
+  fixture.api.storage.managed.get.mockResolvedValue({ McpAllowedModes: ['read-only'] });
+  fixture.stored['mcp-settings-v1'] = { ...(fixture.stored['mcp-settings-v1'] as object), mode: 'read-only' };
+  expect((await httpCall('list-tools')).tools).not.toContain('fill_element');
+});
+
+it('preserves independent credentials when two settings pages add clients concurrently', async () => {
+  const created = await Promise.all(['First', 'Second'].map(name => controller.ui({ action: 'hfs-add-client', name }, page))) as any[];
+  expect(created[0].clientId).not.toBe(created[1].clientId);
+  expect((fixture.stored['mcp-hfs-installation-v1'] as any).clients).toHaveLength(2);
+  expect((await controller.ui({ action: 'read' }, page)).clients).toHaveLength(2);
+});
+it('does not publish a profile or approval if storage fails', async () => {
+  fixture.api.storage.local.set.mockRejectedValueOnce(new Error('storage-failed'));
+  await expect(controller.ui({ action: 'hfs-add-client', name: 'Failed' }, page)).rejects.toThrow('storage-failed');
+  expect(fixture.stored['mcp-hfs-installation-v1']).toBeUndefined();
+  expect(fixture.stored['mcp-clients-v1']).toBeUndefined();
+});
+it('updates the running relay when a new client is added and never inherits existing Write', async () => {
+  writeMode(); await automaticClient();
+  enableHttpSettings();
+  await controller.ui({ action: 'start' }, page);
+  await share('write');
+  const added = await controller.ui({ action: 'hfs-add-client', name: 'Second HTTP' }, page) as any;
+  expect(fixture.http.route.syncClients).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ id: added.clientId, hash: expect.stringMatching(/^[a-f0-9]{64}$/u) })]));
+  const state = await controller.ui({ action: 'read' }, page) as any;
+  expect(state.connections.filter((connection: any) => connection.clientId === added.clientId)).toMatchObject([{ mode: 'read-only' }]);
+});
+it('keeps an added client usable for later copying when relay synchronization fails', async () => {
+  enableHttpSettings(); await controller.ui({ action: 'start' }, page);
+  fixture.http.route.syncClients.mockRejectedValue(new Error('relay-down'));
+  const added = await controller.ui({ action: 'hfs-add-client', name: 'Offline client' }, page) as any;
+  expect((await controller.ui({ action: 'hfs-client-value', clientId: added.clientId, field: 'authorization' }, page) as any).value).toMatch(/^Bearer /u);
 });

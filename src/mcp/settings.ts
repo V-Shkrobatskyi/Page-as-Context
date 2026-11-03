@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Vitalii Shkrobatskyi
 // SPDX-License-Identifier: GPL-3.0-only
+import { validateHfsSettings, type HfsSettings } from './hfs-settings';
 import { browser } from 'wxt/browser';
 import { readPolicy, captureOptions, type PolicySnapshot } from '../policy/runtime';
 import { assertAction, resolvePreferences, mergeManagedFilters, PolicyError, resolveDataControls, type ExportPreferences } from '../policy/model';
@@ -14,6 +15,8 @@ export interface McpAutoDisconnect { amount: number; unit: 'minutes' | 'hours' |
 export const defaultAutoDisconnect = (): McpAutoDisconnect => ({ amount: 1, unit: 'hours' });
 export interface McpSettings {
   version: 1;
+  nativeEnabled?: boolean;
+  hfs?: HfsSettings;
   enabled: boolean;
   connection?: 'automatic' | 'manual';
   mode: McpMode;
@@ -34,11 +37,13 @@ export function validateMcpSettings(raw: unknown): McpSettings {
   if (raw === undefined) return defaultMcpSettings();
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new PolicyError('Unable to load MCP settings.');
   const value = raw as McpSettings & { allowPageActions?: boolean };
-  if (Object.keys(raw).some(key => !['version', 'enabled', 'connection', 'allowPageActions', 'mode', 'inherit', 'preferences', 'data', 'writeApproval', 'autoDisconnect'].includes(key)) || value.version !== 1 ||
+  if (Object.keys(raw).some(key => !['nativeEnabled', 'hfs', 'version', 'enabled', 'connection', 'allowPageActions', 'mode', 'inherit', 'preferences', 'data', 'writeApproval', 'autoDisconnect'].includes(key)) || value.version !== 1 ||
     value.connection !== undefined && !['automatic', 'manual'].includes(value.connection) ||
     value.allowPageActions !== undefined && typeof value.allowPageActions !== 'boolean' ||
     value.writeApproval !== undefined && !['each-action', 'session'].includes(value.writeApproval) ||
     typeof value.enabled !== 'boolean' || typeof value.inherit !== 'boolean' || !MCP_MODES.includes(value.mode)) throw new PolicyError('Unable to load MCP settings.');
+  if (value.nativeEnabled !== undefined && typeof value.nativeEnabled !== 'boolean') throw new PolicyError('Invalid native transport settings.');
+  if (value.hfs !== undefined) validateHfsSettings(value.hfs);
   if (value.autoDisconnect !== undefined) {
     const timeout = value.autoDisconnect;
     if (!timeout || typeof timeout !== 'object' || Array.isArray(timeout) || Object.keys(timeout).some(key => !['amount', 'unit'].includes(key)) ||
@@ -67,6 +72,9 @@ export async function resolveMcpSettings(draft?: McpSettings) {
   const settings = draft ? validateMcpSettings(draft) : saved;
   if (draft && snapshot.policy.McpSettingsLocked && JSON.stringify(settings) !== JSON.stringify(saved)) throw new PolicyError('MCP settings are managed by your organization.');
   const policy = snapshot.policy;
+  const nativeAllowed = (policy.McpAllowedTransports ?? ['native', 'hfs']).includes('native');
+  const hfsAllowed = (policy.McpAllowedTransports ?? ['native', 'hfs']).includes('hfs') && (!policy.McpHfsEndpoint || settings.hfs?.endpoint === policy.McpHfsEndpoint);
+  if (draft && (settings.nativeEnabled !== false && !nativeAllowed || settings.hfs?.enabled && !hfsAllowed)) throw new PolicyError('This MCP transport is disabled by your administrator.');
   const preferences = resolvePreferences(policy, settings.inherit ? stored['popup-settings'] ?? {} : settings.preferences);
   const filters = mergeManagedFilters(policy, policy.UserRedactionRulesAllowed === false ? defaultRedactionSettings() :
     stored[REDACTION_SETTINGS_KEY] === undefined ? defaultRedactionSettings() : validateRedactionSettings(stored[REDACTION_SETTINGS_KEY]));
@@ -81,7 +89,7 @@ export async function resolveMcpSettings(draft?: McpSettings) {
   const bytes = new TextEncoder().encode(JSON.stringify({ snapshot, saved, preferences, filters, data }));
   const revision = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => byte.toString(16).padStart(2, '0')).join('');
   const sessionApprovalAllowed = policy.McpWriteApproval !== 'each-action';
-  return { snapshot, settings, preferences, filters, data, controls, revision, modeAllowed, sessionApprovalAllowed };
+  return { nativeAllowed, hfsAllowed, snapshot, settings, preferences, filters, data, controls, revision, modeAllowed, sessionApprovalAllowed };
 }
 
 export async function saveMcpSettings(value: unknown, expectedRevision: string) {

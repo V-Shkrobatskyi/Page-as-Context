@@ -120,7 +120,7 @@ for (const target of ['chrome', 'firefox']) {
       assert.equal(fixture.window.domCapture, undefined, 'Collector retains capture data globally');
     } finally { fixture.window.close(); }
   } else {
-    assert.equal(manifest.optional_host_permissions, undefined);
+    assert.deepEqual(manifest.optional_host_permissions, ['http://127.0.0.1/*']);
     assert.ok(!source.includes('getFrameId'), 'Chrome includes Firefox frame API');
     assert.ok(!source.includes('Include frames from other sites'), 'Chrome includes Firefox site access UI');
     assert.ok(!source.includes('Other-site frames enabled'), 'Chrome includes Firefox permission controller');
