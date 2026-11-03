@@ -1,6 +1,6 @@
 # Privacy policy for Page as Context
 
-Last updated: 2026-10-29. Applies to version 2.1.0.
+Last updated: 2026-11-01. Applies to version 2.2.0.
 
 ## Purpose and local processing
 
@@ -79,6 +79,25 @@ Declining or revoking consent blocks the corresponding MCP access while ordinary
 export remains available. Browser capture permissions remain separate from an
 MCP grant; some frames or pages can remain unavailable.
 
+### Optional Local HTTP (HFS)
+
+Local HTTP is separately opt-in and defaults off. It sends authorized MCP requests
+and sanitized results through a dedicated loopback HFS process, bound to
+127.0.0.1 and the saved port. HFS and the generated executable JavaScript in
+config.yaml are trusted local components and can see relayed credentials/content.
+The browser never downloads or executes JavaScript from HFS responses.
+
+Provider secrets, independent HTTP client secrets and profile names are stored in
+browser-local extension storage. The private YAML contains the provider secret;
+client exports contain only their own bearer. Revoke/reset remove the corresponding
+browser state, but exported files, HFS configuration, backups and AI-client settings
+must be removed separately. HFS creates its own runtime files; this relay never
+writes page queues, requests or responses to disk. Generated configuration disables
+access/error logging; administrators must separately bound process output logs.
+HTTP technical status excludes secrets, authorization headers, titles and URLs.
+Firefox transmission consent applies to HTTP as well as Native Messaging. The
+AI client may forward returned content under its own provider policies.
+
 ## Sharing and external services
 
 The extension does not send captured page content, URLs, or preferences to the developer, sell user data, or use it for advertising. You decide whether to paste or upload an export into another application; that application then handles it under its own policies.
@@ -95,6 +114,7 @@ If you email a bug report or post a GitHub issue, the recipient/service receives
 - clipboardWrite: writes the export you request to your clipboard.
 - downloads (Desktop only): saves the export you request as a local file. In Firefox, this permission is optional and requested when you click Save; Android never requests it.
 - nativeMessaging (optional): connects only to the separately installed local helper after explicit MCP enablement and consent.
+- Local HTTP site access (optional): permits only the configured loopback HFS connection; Chrome requests http://127.0.0.1/* on demand. The code separately enforces the saved port.
 - alarms: schedules bounded MCP reconnect attempts and access expiry without capturing pages.
 - storage: persists export preferences and redaction filter settings locally.
 

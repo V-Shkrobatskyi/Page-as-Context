@@ -1,0 +1,11 @@
+Page as Context HFS relay and configuration generator
+Copyright (c) 2026 Vitalii Shkrobatskyi
+SPDX-License-Identifier: GPL-3.0-only
+See the project LICENSE.
+
+HFS is a separately downloaded, unmodified executable by rejetto and contributors.
+Upstream: https://github.com/rejetto/hfs
+Reviewed release: v3.3.4
+License: GPL-3.0; consult its accompanying license, sources and dependency notices.
+HFS is not bundled in the browser extension or in this source directory.
+Distributors bundling HFS must preserve its notices and meet source obligations.

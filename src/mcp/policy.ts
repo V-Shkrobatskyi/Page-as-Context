@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Vitalii Shkrobatskyi
 // SPDX-License-Identifier: GPL-3.0-only
+import { validateHfsEndpoint } from './hfs-settings';
 import { validateSourcePatterns } from '../policy/sources';
 
 export const MCP_MODES = ['read-only', 'read-write'] as const;
@@ -7,6 +8,8 @@ export type McpMode = typeof MCP_MODES[number];
 export const MCP_ACTIONS = ['click', 'fill', 'select-option', 'set-checked'] as const;
 export type McpAction = typeof MCP_ACTIONS[number];
 export interface McpPolicy {
+  McpAllowedTransports?: ('native' | 'hfs')[];
+  McpHfsEndpoint?: string;
   McpAllowed?: boolean;
   McpAllowedModes?: McpMode[];
   McpDefaultMode?: McpMode;
@@ -29,7 +32,7 @@ export function validateMcpPolicy(raw: Record<string, unknown>, invalid: (key: s
     if (typeof raw[key] !== 'boolean') invalid(key);
     result[key] = raw[key] as boolean;
   }
-  for (const [key, allowed] of [['McpAllowedModes', MCP_MODES], ['McpAllowedActions', MCP_ACTIONS]] as const) {
+  for (const [key, allowed] of [['McpAllowedTransports', ['native', 'hfs']], ['McpAllowedModes', MCP_MODES], ['McpAllowedActions', MCP_ACTIONS]] as const) {
     const value = raw[key]; if (value === undefined) continue;
     if (!Array.isArray(value) || value.length > allowed.length || new Set(value).size !== value.length || value.some(item => !(allowed as readonly unknown[]).includes(item))) invalid(key);
     Object.assign(result, { [key]: value });
@@ -53,6 +56,9 @@ export function validateMcpPolicy(raw: Record<string, unknown>, invalid: (key: s
   for (const key of ['McpAllowedCaptureSources', 'McpBlockedCaptureSources'] as const) {
     if (raw[key] === undefined) continue;
     try { result[key] = validateSourcePatterns(raw[key]); } catch { invalid(key); }
+  }
+  if (raw.McpHfsEndpoint !== undefined) {
+    try { result.McpHfsEndpoint = validateHfsEndpoint(raw.McpHfsEndpoint); } catch { invalid('McpHfsEndpoint'); }
   }
   return result;
 }

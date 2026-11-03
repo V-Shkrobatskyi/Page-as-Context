@@ -31,7 +31,7 @@ export default defineBackground(() => {
         ![browser.runtime.getURL('/popup.html'), browser.runtime.getURL('/mcp.html'), browser.runtime.getURL('/mcp-approval.html')].includes(sender.url.split('#')[0]!)) return;
       const reply = (value: unknown) => { try { sendResponse(value); } catch { /* The settings page or popup may have closed. */ } };
       void mcp.ui(message, sender).then(reply, (error: unknown) => {
-        const code = error instanceof Error && ['unsupported-page', 'invalid-source', 'invalid-sender', 'invalid-route', 'not-connected', 'source-required', 'permission-required', 'page-changed', 'invalid-instance', 'invalid-clients', 'no-shared-clients', 'read-only'].includes(error.message) ? error.message : 'request-unavailable';
+        const code = error instanceof Error && ['hfs-configuration-required', 'hfs-configuration-exists', 'invalid-hfs-endpoint', 'relay-authentication-failed', 'provider-already-connected', 'unsupported-page', 'invalid-source', 'invalid-sender', 'invalid-route', 'not-connected', 'source-required', 'permission-required', 'page-changed', 'invalid-instance', 'invalid-clients', 'no-shared-clients', 'read-only'].includes(error.message) ? error.message : 'request-unavailable';
         reply({ ok: false, code, error: error instanceof PolicyError ? error.message : 'MCP request unavailable. Check permissions, policies and the connected source, then reload.' });
       });
       return true;

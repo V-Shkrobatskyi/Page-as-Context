@@ -19,8 +19,8 @@ npm run zip:firefox
 ```
 
 The installed extension files are in `.output/firefox-mv3/`. The unsigned archive
-is `.output/page-as-context-2.1.0-firefox.zip`; the accompanying source archive is
-`.output/page-as-context-2.1.0-sources.zip`. Filenames use the package version, so
+is `.output/page-as-context-2.2.0-firefox.zip`; the accompanying source archive is
+`.output/page-as-context-2.2.0-sources.zip`. Filenames use the package version, so
 they change when the version changes. Compare uncompressed file paths and bytes
 with the submitted extension ZIP; ZIP container timestamps are not build content.
 
@@ -52,7 +52,7 @@ Full contributor checks run from the repository with `npm run check`.
 npm run zip
 ```
 
-The Chrome package is `.output/page-as-context-2.1.0-chrome.zip`, built from
+The Chrome package is `.output/page-as-context-2.2.0-chrome.zip`, built from
 `.output/chrome-mv3/`. Upload the extension ZIP, not the reviewer sources.
 
 ## Shared Firefox Desktop and Android package
@@ -83,3 +83,18 @@ ChatGPT builder with `--client claude-code` for the Claude Code package; see
 [integration build notes](integrations/claude/README.md). All packages use
 the same checksum-verified Node 24.10.0 archive. Icon variants can be regenerated
 with `python3 scripts/render-ai-icons.py` (Pillow required for regeneration only).
+
+## Local HTTP (HFS) bridge
+
+Run `npm run check:hfs` for the source-hash/generator/contract checks. The optional
+`npm run check:hfs:live -- --binary /absolute/path/to/hfs` uses an already downloaded
+HFS 3.3.4 on fixed test port 39862, a private temporary config and synthetic SDK
+clients; it installs no service and does not read real pages. Developer dependencies
+are not shipped to HFS users. Browser/source archives include the shared catalog,
+relay and generator sources, never an HFS executable or actual secrets.
+Server setup downloads include YAML and a plain launch script for
+macOS/Windows/Linux, not native installers. Client creation and optional JSON
+export are separate from server setup. `tests/mcp/launchers.test.ts` runs shell launchers against a fake binary;
+this does not establish GUI acceptance. Separate user-run Windows 10 x64 checks
+covered startup and Chrome/Firefox HTTP reads/actions; Linux startup remains unverified. See
+[HFS setup and acceptance limits](docs/hfs-integration.md).

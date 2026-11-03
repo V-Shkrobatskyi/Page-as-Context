@@ -28,7 +28,7 @@ The popup supports **Semantic Text** (default) and **Markdown**. `Compact` is th
 
 Export headers include `Browser:` between `URL:` and `Captured:` in both formats and every compression profile. It records the browser name, Desktop or Android platform when known, and the available version. Firefox uses runtime metadata; Chromium uses local browser hints with a User-Agent fallback. A reduced version is shown as its major version; unavailable versions are omitted, and missing metadata appears as `Unavailable`. This adds no permissions or network requests.
 
-Export attribution includes the installed extension version and a settings digit, for example `2.1.0/7/d (created by V. Shkrobatskyi)` (illustrative version). The codes are Without `0`, Detailed `2`, Compact `4`, Maximum `6`; add `1` when **Redact sensitive data** is enabled. When redaction is enabled, a final `/d` records the default filter configuration for the installed version; `/m` records modified built-in switches or case settings, or any custom rules (including disabled ones). Restoring the default configuration returns the suffix to `/d`. The suffix is omitted when redaction is off. The digit records the selected profile even when Maximum falls back to Compact, and the privacy option rather than a guarantee that every sensitive value was found.
+Export attribution includes the installed extension version and a settings digit, for example `2.2.0/7/d (created by V. Shkrobatskyi)` (illustrative version). The codes are Without `0`, Detailed `2`, Compact `4`, Maximum `6`; add `1` when **Redact sensitive data** is enabled. When redaction is enabled, a final `/d` records the default filter configuration for the installed version; `/m` records modified built-in switches or case settings, or any custom rules (including disabled ones). Restoring the default configuration returns the suffix to `/d`. The suffix is omitted when redaction is off. The digit records the selected profile even when Maximum falls back to Compact, and the privacy option rather than a guarantee that every sensitive value was found.
 
 The popup shows the exact JavaScript character count (including boundaries for Copy), a rough token estimate (`ceil(characters / 4)`), and context reduction relative to Without output with the same format and privacy setting. Boundaries are excluded from the reduction ratio. The estimate is not model-specific tokenization. Maximum uses a separate local cost heuristic for packing; it does not bundle a tokenizer or guarantee savings for every model.
 
@@ -175,3 +175,11 @@ MCP Automatic mode uses the same capture, redaction and data-control pipeline.
 Choose **AI: Read** or **AI: Write** per tab; Write includes reading and supported
 actions. See [MCP integration](mcp-integration.md) for client trust, expiry and
 navigation behavior. Ordinary Copy/Preview/Save remain separate from MCP access.
+
+### Local HTTP capture
+
+Version 2.2.0 adds opt-in HTTP through a dedicated local HFS 3.3.4
+installation. Native remains available; existing settings do not enable HTTP.
+Both routes use the same browser policy, privacy filters, tab grants and action
+approvals. HTTP diagnostics show connection state without secrets or page metadata.
+See [HFS setup, trust boundary and verification limits](hfs-integration.md).

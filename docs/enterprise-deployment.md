@@ -251,3 +251,35 @@ mandatory filters, exclusions, format/compression restrictions, preference save
 policy and source rules remain effective in every channel. An incompatible
 forced Maximum with write addressing fails closed. Policy/settings changes
 invalidate refs and unsent results. See [the read-only preset](enterprise/mcp-read-only.json).
+
+## Optional HFS transport controls
+
+`McpAllowedTransports` accepts `native` and `hfs`; absence allows both without
+enabling either, and an empty array denies both. `McpHfsEndpoint` pins the exact
+HTTP origin (literal 127.0.0.1, saved port 1024–65535). Browser host permissions
+do not restrict the port; runtime validation does. HFS cannot override extension
+policy. Per-client action checkboxes intersect `McpAllowedActions`, Mode, tab
+grants and approvals; an absent client allowlist means all four supported actions.
+
+Use a dedicated HFS configuration directory, versioned relay source/hash from
+[compatibility metadata](../integrations/hfs/compatibility.json), and a verified
+upstream executable digest. On macOS use 0700 directories/0600 configs. On Windows
+restrict the installation/config directory to the deploying user and necessary
+administrators/SYSTEM using your organization's ACL tooling, removing broad
+Users/Everyone read/write access. Verify effective ACLs, backups and endpoint
+protection on the target. Basic Windows startup and reads/actions were manually
+verified; enterprise ACL/MDM deployment acceptance remains unverified. Do not distribute
+one client bearer to multiple applications.
+
+Intune/MDM can distribute a pinned binary and per-user private YAML, then install
+an administrator-reviewed startup entry. No certified Intune package or GUI
+installer is provided. Logs are disabled by the generated config; direct startup
+stdout/stderr to a capped system journal or `/dev/null`, never an unbounded file.
+Updates require explicit digest/source review and matching protocol/config schema;
+health compatibility is not an upstream version attestation. Test both browsers,
+client auth, restart/sleep recovery and revoke before deployment.
+
+For rollback disable HFS in extension settings, revoke HTTP profiles, stop HFS and
+remove only this deployment's startup/config files. Keep Native Messaging
+registrations and unrelated HFS installations. Rotate a shared provider secret
+across joined profiles together. See the [HFS guide](hfs-integration.md).

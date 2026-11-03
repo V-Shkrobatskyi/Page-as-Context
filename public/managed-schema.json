@@ -309,6 +309,15 @@
       "type": "boolean",
       "description": "Allow manual technical-journal clearing. Default: true. Automatic retention still applies."
     },
+    "McpAllowedTransports": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["native", "hfs"] },
+      "description": "Allowed MCP transports. Empty denies both; absence allows both without enabling HFS."
+    },
+    "McpHfsEndpoint": {
+      "type": "string",
+      "description": "Exact allowed Local HTTP endpoint, for example http://127.0.0.1:39861. Runtime requires a literal loopback host and port 1024–65535."
+    },
     "McpAllowed": {
       "type": "boolean",
       "description": "Allow explicitly authorized external MCP connections. Does not enable MCP automatically."

@@ -16,3 +16,8 @@ it.each([false, true])('preserves Firefox transmission consent without Chrome ta
   expect(fixture.request).toHaveBeenCalledWith({ permissions: ['nativeMessaging'], data_collection:
     ['websiteContent', 'browsingActivity', 'personalCommunications', ...(write ? ['websiteActivity'] : [])] });
 });
+it.each(['chrome', 'firefox'])('requests only loopback access for HTTP-only %s without nativeMessaging', async target => {
+  vi.stubEnv('BROWSER', target); fixture.request.mockResolvedValue(true);
+  expect(await requestMcpPermissions(true, { nativeEnabled: false, hfs: { enabled: true, endpoint: 'http://127.0.0.1:39861' } })).toBe(true);
+  expect(fixture.request).toHaveBeenCalledWith({ permissions: [], origins: ['http://127.0.0.1/*'], ...(target === 'firefox' ? { data_collection: ['websiteContent', 'browsingActivity', 'personalCommunications', 'websiteActivity'] } : {}) });
+});

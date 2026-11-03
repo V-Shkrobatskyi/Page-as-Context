@@ -3,7 +3,7 @@
   "description": "Local browser extension for copying semantic page context in Chrome and Firefox.",
   "private": true,
   "license": "GPL-3.0-only",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "type": "module",
   "scripts": {
     "dev": "wxt",
@@ -18,6 +18,8 @@
     "test:watch": "vitest",
     "test:memory": "vitest run --config tests/memory/vitest.config.ts",
     "check": "npm run compile && npm test && npm run test:memory && npm run build && npm run build:firefox && npm run check:browser-builds && npm run lint:firefox",
+    "check:hfs": "node scripts/check-hfs.mjs && vitest run tests/mcp/hfs.test.ts tests/mcp/hfs-adapter.test.ts",
+    "check:hfs:live": "node scripts/hfs-live-check.mjs",
     "check:desktop-runtime": "node scripts/check-desktop-runtime.mjs",
     "check:browser-builds": "node scripts/check-browser-builds.mjs",
     "lint:firefox": "web-ext lint --source-dir .output/firefox-mv3",

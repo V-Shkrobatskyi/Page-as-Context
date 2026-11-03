@@ -17,6 +17,7 @@ describe('browser capabilities', () => {
     const manifest = browserManifest('chrome');
     expect(manifest.permissions).toEqual(['debugger', 'activeTab', 'scripting', 'clipboardWrite', 'downloads', 'storage', 'alarms']);
     expect(manifest.optional_permissions).toEqual(['nativeMessaging']);
+    expect(manifest.optional_host_permissions).toEqual(['http://127.0.0.1/*']);
     expect(manifest.browser_specific_settings).toBeUndefined();
     expect(manifest.host_permissions).toBeUndefined();
     expect(manifest.minimum_chrome_version).toBe('125');
