@@ -131,7 +131,7 @@ test('SDK client launches actual stdio helper, negotiates supported protocol and
   assert.equal(JSON.parse(result.content[0].text).nonce, 'synthetic_nonce_005');
   await assert.rejects(client.callTool({ name: 'transport_probe', arguments: { nonce: 'synthetic_nonce_005', tabId: 1 } }));
 });
-test('production tool discovery is stable before a write grant and browser rejection still applies', async t => {
+test('production tool discovery respects the browser catalog and still rejects cached write calls', async t => {
   const config = await fixture(t);
   await endpoint(t, config, instanceId, { answer: (message, socket) => {
     const result = message.request.tool === 'list-tools' ? { tools: ['get_connection_status', 'read_page_context'] } : { error: 'read-only' };
@@ -141,7 +141,7 @@ test('production tool discovery is stable before a write grant and browser rejec
   const client = new Client({ name: 'stable-catalog-test', version: '1' }); t.after(() => client.close());
   await client.connect(new StdioClientTransport({ command: process.execPath, args: [new URL('../src/cli.mjs', import.meta.url).pathname, 'stdio', '--directory', config.directory, '--credential', path], stderr: 'pipe' }));
   const discovered = (await client.listTools()).tools.map(tool => tool.name);
-  assert.ok(discovered.includes('click_element')); assert.ok(discovered.includes('fill_element'));
+  assert.deepEqual(discovered, ['get_connection_status', 'read_page_context']);
   const result = await client.callTool({ name: 'click_element', arguments: { connectionId: randomUUID(), snapshotId: randomUUID(), elementRef: randomUUID(), operationId: randomUUID() } });
   assert.equal(result.isError, true);
   assert.deepEqual(JSON.parse(result.content[0].text), { error: 'read-only' });
@@ -204,7 +204,7 @@ test('shared-tab discovery uses the authenticated bridge and validates selectors
   const received = [];
   await endpoint(t, config, instanceId, { answer(message, socket) {
     received.push(message.request);
-    const result = message.request.tool === 'list-tools' ? { tools: [] } : { tabs: [{ connectionId: 'synthetic_connection_001', mode: 'read-only' }] };
+    const result = message.request.tool === 'list-tools' ? { tools: ['list_shared_tabs', 'resolve_shared_tab'] } : { tabs: [{ connectionId: 'synthetic_connection_001', mode: 'read-only' }] };
     for (const chunk of resultChunks(message.id, result)) writeFrame(socket, chunk);
   } });
   const path = join(config.directory, 'client.json'); await createPrivateJson(path, credential());
