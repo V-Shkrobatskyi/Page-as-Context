@@ -2,6 +2,8 @@
 
 ## 2.2.0 — unreleased
 
+- Clarify platform support: the ChatGPT Desktop, Claude Desktop and Claude Code packages target macOS Apple Silicon only. Local HTTP (HFS) reads and actions were verified in Chrome and Firefox on macOS and Windows 10 x64; Linux startup remains unverified. Windows x64, Intel Mac and Linux desktop packages are not provided.
+
 - Show a live HFS lease retry countdown using the background retry deadline, without restarting it on settings refresh or blocking Native helper controls. Refresh status automatically when the wait ends and while HFS reconnects.
 
 - Serialize first-time browser identity initialization and retry failed persistence; send explicitly empty HTTP 202/204 replies through HFS and accept SDK DELETE requests without a POST-only Accept requirement.
