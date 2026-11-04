@@ -1,6 +1,6 @@
 # Privacy policy for Page as Context
 
-Last updated: 2026-11-01. Applies to version 2.2.0.
+Last updated: 2026-11-04. Applies to version 2.2.0.
 
 ## Purpose and local processing
 
@@ -128,7 +128,7 @@ Local diagnostics contain operational information such as capture status, root r
 
 ## Chrome Web Store Limited Use
 
-Page as Context uses information obtained through browser permissions solely for its user-requested page-context export feature. Its use of that information complies with the Chrome Web Store User Data Policy, including the Limited Use requirements. The extension does not transfer captured data to the developer or third parties, use it for personalized advertising, or give the developer access to your captures.
+Page as Context uses information obtained through browser permissions only to provide user-requested capture and export, explicitly authorized MCP reads and page actions, and optional local capture history. Its use and transfer of this information comply with the Chrome Web Store User Data Policy, including the Limited Use requirements. Captured content is not sent to the developer, sold, or used for advertising or credit decisions. When users enable MCP and share tabs, filtered context is sent to their authorized AI application through a local connection; that application may forward it to its model provider.
 
 ## Changes and contact
 

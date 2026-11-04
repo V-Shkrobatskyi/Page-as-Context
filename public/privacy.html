@@ -92,7 +92,7 @@ SPDX-License-Identifier: GPL-3.0-only
     </nav>
     <main class="page-main prose">
       <h1>Privacy policy for Page as Context</h1>
-      <p>Last updated: 2026-11-01. Applies to version 2.2.0.</p>
+      <p>Last updated: 2026-11-04. Applies to version 2.2.0.</p>
       <h2>Optional Local HTTP (HFS)</h2>
       <p>Local HTTP is separately opt-in and defaults off. It relays authorized MCP requests and sanitized results through a dedicated HFS process on 127.0.0.1 and the saved port. HFS and the generated executable JavaScript in config.yaml are trusted local components and can see relayed credentials and content. The extension never downloads or executes JavaScript from HFS responses.</p>
       <p>Provider secrets, independent client secrets and names are stored in browser-local extension storage. Private YAML contains the provider secret; client exports contain only their own bearer. Revoke/reset remove browser state; remove exported files, HFS config, backups and AI-client settings separately. HFS creates runtime files, but the relay never persists page queues or request/response content. Generated config disables access/error logs; process output needs separate retention controls. Diagnostics exclude secrets, headers, titles and URLs. Firefox transmission consent also applies to HTTP. The AI client may forward results under its provider policies.</p>
@@ -162,7 +162,7 @@ SPDX-License-Identifier: GPL-3.0-only
 
       <section aria-labelledby="limited-use">
         <h2 id="limited-use">Chrome Web Store Limited Use</h2>
-        <p>Information obtained through browser permissions is used solely for user-requested page-context export, in compliance with the Chrome Web Store User Data Policy, including Limited Use requirements. Captured data is not transferred to the developer or third parties, used for personalized advertising, or made accessible to the developer.</p>
+        <p>Page as Context uses information obtained through browser permissions only to provide user-requested capture and export, explicitly authorized MCP reads and page actions, and optional local capture history. Its use and transfer of this information comply with the Chrome Web Store User Data Policy, including the Limited Use requirements. Captured content is not sent to the developer, sold, or used for advertising or credit decisions. When users enable MCP and share tabs, filtered context is sent to their authorized AI application through a local connection; that application may forward it to its model provider.</p>
       </section>
 
       <section aria-labelledby="contact">
