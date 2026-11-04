@@ -200,6 +200,18 @@ Personal site restrictions are available in **Data controls → Capture sources*
 Connect an external assistant to one explicitly shared tab in Read only or Read and write mode. MCP starts disabled and uses a separately installed local helper or the optional
 [Local HTTP transport](docs/hfs-integration.md). Privacy filters and organization policies apply. Write actions require additional browser-side permission and approval. The client may forward context to its model provider. See [setup, limits and verification](docs/mcp-integration.md).
 
+### MCP platform support
+
+The ready-to-install desktop packages are platform-specific:
+
+| Connection | Platform support |
+| --- | --- |
+| ChatGPT Desktop plugin | macOS with Apple Silicon (arm64) only |
+| Claude Desktop MCPB and Claude Code plugin | macOS with Apple Silicon (arm64) only |
+| Local HTTP (HFS) with a compatible MCP client | Tested with Chrome and Firefox on macOS Apple Silicon and Windows 10 x64; Linux startup remains unverified |
+
+Each desktop package includes a macOS arm64 Node.js runtime. Windows x64, Intel Mac and Linux desktop packages are not currently provided. On Windows, use the [Local HTTP setup](docs/hfs-integration.md). MCP access is desktop-only; these package limits do not restrict the browser extension's capture and export features.
+
 ### Automatic MCP tab access
 
 Enable MCP once and choose Automatic connection. Existing installations stay
