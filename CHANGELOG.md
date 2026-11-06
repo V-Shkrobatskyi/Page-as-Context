@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.2.1 — unreleased
+
+- Normalize empty Chrome accessibility names consistently during capture and action validation, preventing false stale-snapshot rejections for unnamed controls. Custom editors still need a supported input mechanism.
+- Support explicitly confirmed browser-instance changes in the shared plugin helper with separate instance credentials, activation after successful code pairing, and preservation of the previous profile after cancellation or failure. Running updated plugin servers switch profiles without restarting the chat.
+- Require a fresh Read or Write choice for newly paired clients before they can access previously shared tabs; preserve existing clients' grants while a new pairing is pending.
+- Return normal cancelled setup results without a generic operation error; retain diagnostics for actual failures and incomplete cleanup.
+- Show Extension ID beside Browser instance in Helper connection setup details.
+- Package the updated shared helper in ChatGPT plugin 1.2.1 and Claude Desktop / Claude Code 0.2.1.
+- Update the bundled guide and README to the new v2.2.0 demo video, including the README thumbnail; synchronize release and privacy metadata for 2.2.1.
+
 ## 2.2.0 — unreleased
 
 - Clarify platform support: the ChatGPT Desktop, Claude Desktop and Claude Code packages target macOS Apple Silicon only. Local HTTP (HFS) reads and actions were verified in Chrome and Firefox on macOS and Windows 10 x64; Linux startup remains unverified. Windows x64, Intel Mac and Linux desktop packages are not provided.

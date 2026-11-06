@@ -1,6 +1,6 @@
 # Privacy policy for Page as Context
 
-Last updated: 2026-11-04. Applies to version 2.2.0.
+Last updated: 2026-11-06. Applies to version 2.2.1.
 
 ## Purpose and local processing
 
@@ -40,9 +40,10 @@ You can change saved preferences in the popup or remove extension-local preferen
 MCP is disabled by default. New installations default to Automatic connection;
 existing installations remain Manual until you choose Automatic. Choose
 **AI Off / Read / Write** in the source tab popup. Read can be selected before
-a client connects. In Automatic, one-time pairing code comparison and approval
-authorize each client for all tabs marked Read or Write, without another
-shared-access opt-in. Write includes reading and supported actions, with browser
+a client connects. In Automatic, one-time code comparison and pairing approval
+establish the client identity without granting tab access. Choose Read or Write
+again on each source tab after pairing to include the new client. Legacy clients
+keep their existing sharing behavior. Write includes reading and supported actions, with browser
 approval before each action by default. Clients keep independent credentials.
 
 The local helper uses private IPC and Native Messaging. The AI client may send
