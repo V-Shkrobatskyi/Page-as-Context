@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "browser-chrome": {
+      "command": "./runtime/node",
+      "args": ["${PLUGIN_ROOT}/server.mjs", "chrome"],
+      "cwd": "${PLUGIN_ROOT}"
+    },
+    "browser-firefox": {
+      "command": "./runtime/node",
+      "args": ["${PLUGIN_ROOT}/server.mjs", "firefox"],
+      "cwd": "${PLUGIN_ROOT}"
+    }
+  }
+}

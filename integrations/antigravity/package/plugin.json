@@ -1,0 +1,10 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "page-as-context",
+  "displayName": "Page as Context",
+  "version": "0.1.1",
+  "description": "Read filtered context and perform explicitly authorized actions in shared Chrome or Firefox tabs through a local browser bridge.",
+  "author": { "name": "Vitalii Shkrobatskyi" },
+  "license": "GPL-3.0-only",
+  "suggestedPrompts": ["Connect Page as Context to Chrome", "Connect Page as Context to Firefox"]
+}

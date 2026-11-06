@@ -6,11 +6,12 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 
 const source = resolve(process.argv[2] ?? '');
 if (!process.argv[2]) throw new Error('Pass the built marketplace folder. Run this check with its bundled runtime/node.');
 const clientKind = process.argv[3] ?? 'chatgpt', browser = process.argv[4] ?? 'chrome';
-assert.ok(['chatgpt', 'claude-code'].includes(clientKind)); assert.ok(['chrome', 'firefox'].includes(browser));
+assert.ok(['chatgpt', 'claude-code', 'antigravity'].includes(clientKind)); assert.ok(['chrome', 'firefox'].includes(browser));
 const extensionId = browser === 'chrome' ? 'a'.repeat(32) : 'page-as-context@synthetic.test';
 const originalPlugin = join(source, 'plugins/page-as-context');
 const from = (root, path) => import(pathToFileURL(join(root, path)));
@@ -32,6 +33,24 @@ let broker, client, second, native;
 try {
   const { target } = await stagePackage(source, join(root, 'private installation'));
   const plugin = join(target, 'plugins/page-as-context');
+  if (clientKind === 'antigravity') {
+    const manifest = JSON.parse(await readFile(join(plugin, 'plugin.json'), 'utf8'));
+    assert.equal(manifest.$schema, 'https://antigravity.google/schemas/v1/plugin.json');
+    assert.equal(manifest.version, release.version);
+    assert.equal(manifest.displayName, 'Page as Context');
+    const config = JSON.parse(await readFile(join(plugin, 'mcp_config.json'), 'utf8'));
+    assert.deepEqual(Object.keys(config.mcpServers).sort(), ['browser-chrome', 'browser-firefox']);
+    for (const browser of ['chrome', 'firefox']) {
+      const entry = config.mcpServers[`browser-${browser}`];
+      assert.deepEqual(entry, { command: './runtime/node', args: ['${PLUGIN_ROOT}/server.mjs', browser], cwd: '${PLUGIN_ROOT}' });
+      // Emulate the documented path expansion without assuming a global Node.
+      const expand = value => value.replaceAll('${PLUGIN_ROOT}', plugin);
+      const rejected = spawnSync(join(expand(entry.cwd), entry.command), [expand(entry.args[0]), 'invalid-browser'], { cwd: expand(entry.cwd), env: { PATH: '/usr/bin:/bin' }, encoding: 'utf8', timeout: 5000 });
+      assert.equal(rejected.status, 1);
+      assert.match(rejected.stderr, /Select exactly chrome or firefox/);
+    }
+    assert.equal((await readFile(join(plugin, 'skills/browser-setup/SKILL.md'), 'utf8')).includes('Never approve pairing'), true);
+  }
   if (clientKind === 'claude-code') {
     const pluginManifest = JSON.parse(await readFile(join(plugin, '.claude-plugin/plugin.json'), 'utf8'));
     const desktopManifest = JSON.parse(await readFile(join(plugin, 'manifest.json'), 'utf8'));
@@ -49,9 +68,16 @@ try {
   const { readFrames, writeFrame, resultChunks } = await from(plugin, 'helper/src/framing.mjs');
   const { disconnectClient } = await from(plugin, 'helper/src/admin-client.mjs');
   const state = join(root, 'browser state'), instanceId = randomUUID();
+  const foreignProfiles = [];
   const connect = async () => {
     const value = new Client({ name: 'installed-package-check', version: '1' });
-    await value.connect(new StdioClientTransport({ command: join(plugin, 'runtime/node'), args: [join(plugin, 'server.mjs'), browser, ...(clientKind === 'claude-code' ? ['--client', 'code'] : []), '--directory', state, '--manifest-home', join(root, 'isolated browser home')], cwd: tmpdir(), env: { PATH: '/usr/bin:/bin' }, stderr: 'pipe' }));
+    let command = join(plugin, 'runtime/node'), args = [join(plugin, 'server.mjs'), browser, ...(clientKind === 'claude-code' ? ['--client', 'code'] : [])], cwd = tmpdir();
+    if (clientKind === 'antigravity') {
+      const entry = JSON.parse(await readFile(join(plugin, 'mcp_config.json'), 'utf8')).mcpServers[`browser-${browser}`];
+      const expand = value => value.replaceAll('${PLUGIN_ROOT}', plugin);
+      cwd = expand(entry.cwd); command = resolve(cwd, entry.command); args = entry.args.map(expand);
+    }
+    await value.connect(new StdioClientTransport({ command, args: [...args, '--directory', state, '--manifest-home', join(root, 'isolated browser home')], cwd, env: { PATH: '/usr/bin:/bin' }, stderr: 'pipe' }));
     return value;
   };
   client = await connect();
@@ -66,6 +92,14 @@ try {
   assert.equal(plan.confirmationRequired, true);
   assert.deepEqual(await readdir(state).catch(error => { if (error.code === 'ENOENT') return []; throw error; }), []);
   assert.equal((await call('confirm_browser_setup', { requestId: plan.requestId, confirmed: false })).error, 'setup-confirmation-required');
+  if (clientKind === 'antigravity') {
+    for (const other of ['chatgpt', 'claude', 'claude-code']) {
+      const directory = await privateDirectory(join(state, other, 'profiles'));
+      const path = join(directory, 'unrelated-profile.json');
+      await createPrivateJson(path, { fixture: other, unchanged: true });
+      foreignProfiles.push({ path, bytes: await readFile(path) });
+    }
+  }
   const started = await call('confirm_browser_setup', { requestId: plan.requestId, confirmed: true });
   assert.equal(started.error, undefined);
   const { privateJson } = await from(plugin, 'helper/src/security.mjs');
@@ -124,6 +158,7 @@ try {
   broker = undefined;
   await new Promise(resolve => setTimeout(resolve, 100));
   await uninstall(state);
+  for (const { path, bytes } of foreignProfiles) assert.deepEqual(await readFile(path), bytes, 'Other client profiles must remain byte-for-byte unchanged.');
   assert.ok((await readdir(state)).includes(clientKind), 'Credentials remain until explicit cleanup.');
   console.log(JSON.stringify({ passed: true, client: clientKind, browser, version: release.version, packageFiles: Object.keys(release.files).length,
     installedCopy: true, globalNodeRequired: false, setupAppRequired: false, tools: 13, setupStatusWithoutInstallation: true,

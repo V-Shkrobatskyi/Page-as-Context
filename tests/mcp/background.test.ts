@@ -1359,3 +1359,23 @@ it('closing a newly paired candidate without tab grants does not downgrade the o
   expect((await controller.ui({ action: 'popup-read' }, popup)).mode).toBe('write');
   expect((await call('list_shared_tabs', {}, 'b'.repeat(43), 'synthetic_client_002')).tabs).toEqual([]);
 });
+
+it.each(['read', 'write'])('recreates only Read for an existing Automatic %s share after the last client session disconnects', async mode => {
+  await automaticClient(); await share(mode);
+  const previous = (await call('list_shared_tabs')).tabs[0];
+  const snapshot = await call('read_page_context', { connectionId: previous.connectionId });
+  const expiresAt = (await call('list_shared_tabs')).tabs[0].expiresAt;
+  port.postMessage.mockClear();
+  port.onMessage.emit({ type: 'client-disconnected', credentialId: 'synthetic_client_001', credentialSecret: 'a'.repeat(43) });
+  await vi.waitFor(() => expect(port.postMessage).toHaveBeenCalledWith({ type: 'tools-changed', credentialId: 'synthetic_client_001' }));
+  expect((await call('read_page_context', { connectionId: previous.connectionId })).error).toBe('request-rejected');
+  const [current] = (await call('list_shared_tabs')).tabs;
+  expect(current.mode).toBe('read-only');
+  expect(current.connectionId).not.toBe(previous.connectionId);
+  expect(current.expiresAt).toBe(expiresAt);
+  expect((await call('fill_element', { connectionId: current.connectionId, snapshotId: snapshot.snapshotId, elementRef: crypto.randomUUID(), operationId: crypto.randomUUID(), text: 'must not write' })).error).toBe('read-only');
+  expect(fixture.action).not.toHaveBeenCalled();
+  expect((await call('read_page_context', { connectionId: current.connectionId })).context).toContain('Synthetic');
+  const state = await controller.ui({ action: 'read' }, page);
+  expect(state.sharedTabs!.flatMap((tab: any) => tab.connections).every((connection: any) => !connection.skipPrompts)).toBe(true);
+});
