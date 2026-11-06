@@ -4,6 +4,7 @@
 import type { CaptureResult, NodeStates, SemanticNode, SemanticTree } from '../../core';
 
 import type { ChromeAxNode, ChromeAxProperty, ChromeAxTreeResponse, ChromeAxValue } from './types';
+import { normalizeAxName } from './ax-name';
 
 const STATE_PROPERTIES: ReadonlyMap<string, keyof NodeStates> = new Map([
   ['checked', 'checked'],
@@ -189,7 +190,7 @@ export function normalizeChromeAxTree(response: ChromeAxTreeResponse, options: {
       children,
     };
     if (properties.get('editable')?.value) normalized.editable = true;
-    const name = stringValue(node.name);
+    const name = normalizeAxName(node.name);
     const numericValue = numberValue(node.value);
     const value = stringValue(node.value) ?? (numericValue === undefined ? undefined : String(numericValue));
     const level = numberValue(properties.get('level'));

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import type { SemanticNode } from '../../core/model';
 import type { ChromeAxNode } from './types';
+import { normalizeAxName, validAxName } from './ax-name';
 import { chromeDebuggerClient } from './capture';
 import type { ChromeDebuggerSession } from './capture';
 import { ACTION_ROLES, type ActionLease, type ActionSnapshot, type ActionCommand, type ActionOutcome } from '../actions/contract';
@@ -11,7 +12,7 @@ import { ACTION_SENSITIVE_PATTERN } from '../actions/sensitive';
 interface Target { backend: number; frameId: string; loaderId: string; targetId?: string; name?: string }
 const registries = new Map<string, Map<string, Target>>();
 export function rememberChromeTarget(lease: ActionLease, raw: ChromeAxNode, node: SemanticNode, frame: { id: string; loaderId: string; targetId?: string }) {
-  if (!raw.backendDOMNodeId || !ACTION_ROLES.has(node.role) || node.states?.disabled || new RegExp(ACTION_SENSITIVE_PATTERN, 'iu').test(node.name ?? '') || lease.expires <= Date.now()) return;
+  if (!raw.backendDOMNodeId || !validAxName(raw.name) || !ACTION_ROLES.has(node.role) || node.states?.disabled || new RegExp(ACTION_SENSITIVE_PATTERN, 'iu').test(node.name ?? '') || lease.expires <= Date.now()) return;
   const registry = registries.get(lease.snapshotId); if (!registry || registry.size >= 10000) return;
   const ref = crypto.randomUUID(); node.actionRef = ref;
   registry.set(ref, { backend: raw.backendDOMNodeId, frameId: frame.id, loaderId: frame.loaderId, ...(frame.targetId ? { targetId: frame.targetId } : {}), name: node.name });
@@ -56,7 +57,7 @@ export function createChromeActionSnapshot(tabId: number, lease: ActionLease): A
       if (typeof world.executionContextId !== 'number') throw new Error('stale-snapshot');
       const resolve = async (value: Target) => {
         const current = await send('Accessibility.getPartialAXTree', { backendNodeId: value.backend, fetchRelatives: false });
-        if (!current.nodes?.some((node: any) => node.backendDOMNodeId === value.backend && !node.ignored && node.name?.value === value.name)) throw new Error('stale-snapshot');
+        if (!current.nodes?.some((node: ChromeAxNode) => node.backendDOMNodeId === value.backend && !node.ignored && validAxName(node.name) && normalizeAxName(node.name) === value.name)) throw new Error('stale-snapshot');
         const resolved = await send('DOM.resolveNode', { backendNodeId: value.backend, executionContextId: world.executionContextId, objectGroup: 'mcp-action' });
         if (!resolved.object?.objectId) throw new Error('stale-snapshot'); return resolved.object.objectId as string;
       };

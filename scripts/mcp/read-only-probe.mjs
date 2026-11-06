@@ -21,7 +21,7 @@ const { values } = parseArgs({ options: { report: { type: 'string' }, targets: {
 const reports = [];
 const http = createServer((_request, response) => {
   response.setHeader('Content-Type', 'text/html;charset=utf-8');
-  if (_request.url === '/child') { response.end('<!doctype html><title>Synthetic child</title><button onclick="window.frameClicks=(window.frameClicks||0)+1">Frame action</button>'); return; }
+  if (_request.url === '/child') { response.end('<!doctype html><title>Synthetic child</title><input id="unnamed"><button onclick="window.frameClicks=(window.frameClicks||0)+1">Frame action</button>'); return; }
   response.end('<!doctype html><title>Synthetic MCP form</title><main><h1>MCP_READ_SENTINEL_4242</h1><label>Email<input value="synthetic@example.test"></label><label>Password<input type="password" value="NEVER_RETURN_PASSWORD_9911"></label><button disabled>Submit</button><label>Nickname<input id="nickname"></label><label>Enabled<input id="enabled" type="checkbox"></label><label>Color<select size="2" id="color"><option>Blue</option><option>Green</option></select></label><button id="counter" onclick="window.clickCount=(window.clickCount||0)+1;document.getElementById(\'count\').textContent=String(window.clickCount)">Count action</button><p id="count">0</p><button>Duplicate</button><button>Duplicate</button><iframe src="/child" title="Synthetic action frame"></iframe><div id="shadow-host"></div><script>const root=document.getElementById(\'shadow-host\').attachShadow({mode:\'open\'});root.innerHTML=\'<button>Shadow action</button>\';root.querySelector(\'button\').onclick=()=>window.shadowClicks=(window.shadowClicks||0)+1;</script></main>');
 });
 await new Promise(resolve => http.listen(0, '127.0.0.1', resolve));
@@ -105,7 +105,7 @@ try {
       client.setNotificationHandler(ToolListChangedNotificationSchema, () => { toolListChanges++; });
       await client.connect(transport);
       const toolList = await client.listTools();
-      assert.deepEqual(toolList.tools.map(tool => tool.name), ['get_connection_status', 'read_page_context', ...(values.write ? ['click_element','fill_element','select_option','set_checked'] : [])]);
+      assert.deepEqual(toolList.tools.map(tool => tool.name), ['list_shared_tabs', 'resolve_shared_tab', 'get_connection_status', 'read_page_context', ...(values.write ? ['click_element','fill_element','select_option','set_checked'] : [])]);
       stage = 'read-page';
       const result = await client.callTool({ name: 'read_page_context', arguments: { connectionId: grant.connectionId } });
       assert.notEqual(result.isError, true); const payload = JSON.parse(result.content[0].text);
@@ -117,7 +117,7 @@ try {
       const actionCharacters = [];
       if (values.write) {
         const ref = (snapshot, label) => {
-          const line = snapshot.context.split('\n').find(line => line.includes('"' + label + '"') && line.includes('ref='));
+          const line = snapshot.context.split('\n').find(line => (label === null ? line.trimStart().startsWith('textbox [') : line.includes('"' + label + '"')) && line.includes('ref='));
           assert.ok(line, 'Missing issued reference for ' + label); return line.match(/ref="([a-f0-9-]{36})"/)[1];
         };
         const duplicateRefs = payload.context.split('\n').filter(line => line.includes('"Duplicate"') && line.includes('ref=')).map(line => line.match(/ref="([a-f0-9-]{36})"/)[1]);
@@ -154,7 +154,10 @@ try {
         assert.equal(await source('window.clickCount'),1);
         const frameAction = await write('click_element',clicked.result.snapshot,'Frame action'); assert.equal(frameAction.result.status,'applied',JSON.stringify(frameAction.result));
         assert.equal(await source('document.querySelector("iframe").contentWindow.frameClicks'),1);
-        const shadowAction = await write('click_element',frameAction.result.snapshot,'Shadow action'); assert.equal(shadowAction.result.status,'applied',JSON.stringify(shadowAction.result));
+        const unnamed = await write('fill_element', frameAction.result.snapshot, null, { text: 'Unnamed iframe replacement' });
+        assert.equal(unnamed.result.status, 'applied', JSON.stringify(unnamed.result));
+        assert.equal(await source('document.querySelector("iframe").contentDocument.getElementById("unnamed").value'), 'Unnamed iframe replacement');
+        const shadowAction = await write('click_element',unnamed.result.snapshot,'Shadow action'); assert.equal(shadowAction.result.status,'applied',JSON.stringify(shadowAction.result));
         assert.equal(await source('window.shadowClicks'),1);
         const replay = JSON.parse((await client.callTool({name:'click_element',arguments:clicked.args})).content[0].text); assert.equal(replay.status,'applied'); assert.equal(await source('window.clickCount'),1);
         const stale = JSON.parse((await client.callTool({name:'click_element',arguments:{...clicked.args,operationId:randomUUID()}})).content[0].text); assert.equal(stale.status,'rejected');
@@ -164,14 +167,14 @@ try {
       assert.equal(downgraded.ok, true);
       for (let attempt = 0; attempt < 100 && !toolListChanges; attempt++) await new Promise(resolve => setTimeout(resolve, 20));
       assert.ok(toolListChanges > 0, 'Missing SDK tools/list_changed notification');
-      assert.deepEqual((await client.listTools()).tools.map(tool => tool.name), ['get_connection_status','read_page_context']);
+      assert.deepEqual((await client.listTools()).tools.map(tool => tool.name), ['list_shared_tabs','resolve_shared_tab','get_connection_status','read_page_context']);
       if (values.write) {
         const forbidden = await client.callTool({ name: 'click_element', arguments: { connectionId: downgraded.connectionId, snapshotId: payload.snapshotId, elementRef: randomUUID(), operationId: randomUUID() } });
         assert.equal(JSON.parse(forbidden.content[0].text).error, 'read-only');
       }
       await ui('stop'); const stopped = await client.callTool({ name: 'read_page_context', arguments: { connectionId: downgraded.connectionId } }); assert.equal(stopped.isError, true);
       reports.push({ browser, version, read: true, pairing: true, localMatchesExternal: true, passwordAbsent: true, writeRejected: true, writeActions: values.write ? ['click','fill','select-option','set-checked'] : [], retryDeduplicated: values.write, stopRejected: true,
-        toolListChanged: true, sameOriginFrame: values.write, openShadowRoot: values.write,
+        toolListChanged: true, sameOriginFrame: values.write, unnamedIframeFill: values.write, openShadowRoot: values.write,
         wireCharacters: JSON.stringify(result).length, toolListCharacters: JSON.stringify(toolList).length, actionCharacters, limitations: ['Synthetic permission pregrants, programmatic pairing approval; real permission/consent prompts and a model application require manual checks.'] });
       console.log(`${browser}: production pairing, explicit read${values.write ? ", four approved writes, denial and retry protection" : ""}, privacy and Stop passed`);
     } catch (error) { console.error(`${browser} read-only probe failed at ${stage}: ${error.message}`); throw error; }
