@@ -28,14 +28,14 @@ const UNLIMITED_EXPIRY = 8640000000000000;
 const validId = (value: unknown): value is string => typeof value === 'string' && /^[a-zA-Z0-9_-]{16,80}$/u.test(value);
 const digest = async (text: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))), byte => byte.toString(16).padStart(2, '0')).join('');
 const validName = (value: unknown): value is string => typeof value === 'string' && value.trim() === value && value.length > 0 && value.length <= 80 && !/[\p{Cc}\p{Cf}]/u.test(value);
-interface Client { id: string; hash: string; addedAt?: number; name?: string; shared?: boolean; transport?: TransportKind; actions?: McpAction[] }
+interface Client { explicitTabAccess?: boolean; id: string; hash: string; addedAt?: number; name?: string; shared?: boolean; transport?: TransportKind; actions?: McpAction[] }
 function validateClients(value: unknown): Client[] {
-  if (!Array.isArray(value) || value.length > 32 || value.some(client => !client || !validId(client.id) || client.addedAt !== undefined && (!Number.isSafeInteger(client.addedAt) || client.addedAt <= 0 || client.addedAt > 8640000000000000) || client.transport !== undefined && !['native', 'hfs'].includes(client.transport) || client.actions !== undefined && (!Array.isArray(client.actions) || client.actions.length > 4 || new Set(client.actions).size !== client.actions.length || client.actions.some((action: unknown) => !MCP_ACTIONS.includes(action as McpAction))) || client.shared !== undefined && typeof client.shared !== 'boolean' || typeof client.hash !== 'string' || !/^[a-f0-9]{64}$/u.test(client.hash) || client.name !== undefined && !validName(client.name)) ||
+  if (!Array.isArray(value) || value.length > 32 || value.some(client => !client || !validId(client.id) || client.explicitTabAccess !== undefined && typeof client.explicitTabAccess !== 'boolean' || client.addedAt !== undefined && (!Number.isSafeInteger(client.addedAt) || client.addedAt <= 0 || client.addedAt > 8640000000000000) || client.transport !== undefined && !['native', 'hfs'].includes(client.transport) || client.actions !== undefined && (!Array.isArray(client.actions) || client.actions.length > 4 || new Set(client.actions).size !== client.actions.length || client.actions.some((action: unknown) => !MCP_ACTIONS.includes(action as McpAction))) || client.shared !== undefined && typeof client.shared !== 'boolean' || typeof client.hash !== 'string' || !/^[a-f0-9]{64}$/u.test(client.hash) || client.name !== undefined && !validName(client.name)) ||
     new Set(value.map(client => client.id)).size !== value.length) throw new Error('invalid-clients');
   return value;
 }
 interface Grant { transport?: TransportKind; lease?: string; id: string; clientId: string; clientHash: string; tabId: number; origin: string; expires: number; revision: string; write: boolean; sessionApproval: boolean; busy?: boolean }
-interface Share { ref: string; tabId: number; origin: string; url: string; expires: number; revision: string; write: boolean; idleMs: number; hardExpires: number; loading?: boolean }
+interface Share { clientIds?: string[]; ref: string; tabId: number; origin: string; url: string; expires: number; revision: string; write: boolean; idleMs: number; hardExpires: number; loading?: boolean }
 interface Source { tabId: number; url: string; expires: number }
 type NativeRequest = ExecutionRequest;
 
@@ -206,7 +206,7 @@ export function createMcpController() {
         clearTab(tabId); changed = true;
         if (share.loading) continue;
       }
-      for (const client of known.filter(client => routes.get(clientKind(client))?.ready && (!effective.snapshot.policy.McpAllowedClientIds || effective.snapshot.policy.McpAllowedClientIds.includes(client.id)))) {
+      for (const client of known.filter(client => (!client.explicitTabAccess || share.clientIds?.includes(client.id)) && routes.get(clientKind(client))?.ready && (!effective.snapshot.policy.McpAllowedClientIds || effective.snapshot.policy.McpAllowedClientIds.includes(client.id)))) {
         if ([...grants.values()].some(grant => grant.clientId === client.id && grant.tabId === tabId)) continue;
         const write = !routeReadOnly.has(clientKind(client)) && !reconnectReadOnly.has(client.id) && share.write && writeConsent && mcpWritesEnabled(effective.settings) && (effective.snapshot.policy.McpAllowedModes ?? ['read-only', 'read-write']).includes('read-write');
         changed = true; const id = crypto.randomUUID();
@@ -465,10 +465,12 @@ export function createMcpController() {
         clientDisconnected(clientId, secret) {
           if (!current) return;
           const lease = current.lease;
-          void authorizeClient({ type: 'request', id: '', instanceId, browser: import.meta.env.BROWSER, credentialId: clientId, credentialSecret: secret, route: kind, lease, request: { tool: '' } }).then(() => {
+          void authorizeClient({ type: 'request', id: '', instanceId, browser: import.meta.env.BROWSER, credentialId: clientId, credentialSecret: secret, route: kind, lease, request: { tool: '' } }).then(({ client }) => {
             reconnectReadOnly.add(clientId); revokeClientAccess(clientId);
             // Preserve the legacy selection behavior when only one route is running.
-            if (routes.size === 1) for (const share of shares.values()) share.write = false;
+            if (routes.size === 1) for (const share of shares.values()) {
+              if (!client.explicitTabAccess || share.clientIds?.includes(client.id)) share.write = false;
+            }
             notifyUi();
           }, () => {});
         },
@@ -759,7 +761,7 @@ export function createMcpController() {
       const now = Date.now(), idleMs = autoDisconnectMilliseconds(effective.settings);
       const hardExpires = effective.snapshot.policy.McpMaxSessionMinutes === undefined ? UNLIMITED_EXPIRY : now + effective.snapshot.policy.McpMaxSessionMinutes * 60000;
       shares.set(tab.id, { ref: crypto.randomUUID(), tabId: tab.id, origin: new URL(tab.url).origin, url: tab.url,
-        expires: Math.min(now + idleMs, hardExpires), revision: effective.revision, write, idleMs, hardExpires });
+        expires: Math.min(now + idleMs, hardExpires), revision: effective.revision, write, idleMs, hardExpires, clientIds: knownClients.map(client => client.id) });
       await syncShares();
       for (const grant of grants.values()) if (grant.tabId === tab.id && grant.write) grant.sessionApproval = effective.settings.writeApproval === 'session' && effective.sessionApprovalAllowed;
       scheduleExpiry(); notifyUi();
@@ -851,7 +853,7 @@ export function createMcpController() {
       if (!request || request.expires <= Date.now() || raw.code !== request.code ||
         effective.snapshot.policy.McpAllowedClientIds && !effective.snapshot.policy.McpAllowedClientIds.includes(request.id)) throw new Error('pairing-expired');
       const known = await clients(); if (known.length >= 32) throw new Error('client-limit');
-      await browser.storage.local.set({ [CLIENTS_KEY]: [...known.filter(client => client.id !== request.id), { id: request.id, hash: request.hash, addedAt: Date.now(), ...(request.transport === 'hfs' ? { transport: 'hfs' as const } : {}), shared: raw.shared === true, ...(request.name ? { name: request.name } : {}) }] });
+      await browser.storage.local.set({ [CLIENTS_KEY]: [...known.filter(client => client.id !== request.id), { id: request.id, hash: request.hash, explicitTabAccess: true, addedAt: Date.now(), ...(request.transport === 'hfs' ? { transport: 'hfs' as const } : {}), shared: raw.shared === true, ...(request.name ? { name: request.name } : {}) }] });
       pairing.delete(request.id); schedulePairingExpiry(); await syncShares(); notifyUi(); return { ok: true };
     }
     const source = validId(raw.sourceId) ? sources.get(raw.sourceId) : undefined;

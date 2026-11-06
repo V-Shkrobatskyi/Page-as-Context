@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Vitalii Shkrobatskyi; SPDX-License-Identifier: GPL-3.0-only
 import assert from 'node:assert/strict';
+import { checkProfileSwitch } from './check-profile-switch.mjs';
 import { mkdtemp, mkdir, rm, readFile, readdir, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -18,6 +19,14 @@ const release = await verifyPackage(source);
 assert.ok(Object.keys(release.files).every(path => !/(?:^|\/)(?:setup-service\.mjs|legacy-runtime-hashes\.json|[^/]+\.swift)$|\.app\//u.test(path)), 'Plugin inventory must not contain the removed desktop setup application.');
 assert.equal(process.version, 'v24.10.0');
 assert.ok(process.execPath.endsWith('/runtime/node'), 'Use the bundled runtime, not a global Node.');
+async function waitBroker(config, brokerReady) {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    try { return await brokerReady(config); }
+    catch (error) { if (!['broker-unavailable', 'ENOENT', 'ECONNREFUSED'].includes(error.message) && !['ENOENT', 'ECONNREFUSED'].includes(error.code)) throw error; }
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  throw new Error('Setup did not start the broker.');
+}
 const root = await mkdtemp(join(process.platform === 'darwin' ? '/private/tmp' : tmpdir(), 'pac-installed-'));
 let broker, client, second, native;
 try {
@@ -47,22 +56,24 @@ try {
   };
   client = await connect();
   assert.equal(client.getServerVersion().version, release.version);
-  assert.equal((await client.listTools()).tools.length, 12);
+  assert.equal((await client.listTools()).tools.length, 9);
   const setupStatus = JSON.parse((await client.callTool({ name: 'setup_status', arguments: {} })).content[0].text);
   assert.equal(setupStatus.nativeInstalled, false);
   assert.equal((await client.callTool({ name: 'read_page_context', arguments: { connectionId: 'synthetic_connection_001' } })).isError, true);
-  assert.deepEqual(await readdir(state), []);
+  assert.deepEqual(await readdir(state).catch(error => { if (error.code === 'ENOENT') return []; throw error; }), []);
   const call = async (name, args) => JSON.parse((await client.callTool({ name, arguments: args })).content[0].text);
   const plan = await call('prepare_browser_setup', { instanceId, extensionId });
   assert.equal(plan.confirmationRequired, true);
-  assert.deepEqual(await readdir(state), []);
+  assert.deepEqual(await readdir(state).catch(error => { if (error.code === 'ENOENT') return []; throw error; }), []);
   assert.equal((await call('confirm_browser_setup', { requestId: plan.requestId, confirmed: false })).error, 'setup-confirmation-required');
   const started = await call('confirm_browser_setup', { requestId: plan.requestId, confirmed: true });
   assert.equal(started.error, undefined);
   const { privateJson } = await from(plugin, 'helper/src/security.mjs');
-  const credential = await privateJson(join(state, `${clientKind}/profiles/${browser}.json`));
+  const pendingDirectory = join(state, `${clientKind}/profiles/${browser}/instances/${instanceId}`);
+  const [pendingFile] = await readdir(pendingDirectory);
+  const credential = await privateJson(join(pendingDirectory, pendingFile));
   await client.listTools();
-  const config = await configuration(state); broker = await brokerReady(config);
+  const config = await configuration(state); broker = await waitBroker(config, brokerReady);
   native = await connectSocket(config.socket);
   let granted = true, ready, pairingApproved = false;
   const nativeReady = new Promise(resolve => { ready = resolve; });
@@ -92,6 +103,8 @@ try {
   assert.equal((await waitPairing('pending')).code, 'A1B2C3D4');
   pairingApproved = true;
   assert.equal((await waitPairing('approved')).code, undefined);
+  // Simulate a separate user tab grant after the pairing transport has closed.
+  await client.listTools(); granted = true;
   const read = value => value.callTool({ name: 'read_page_context', arguments: { connectionId: 'synthetic_connection_001' } });
   assert.equal(JSON.parse((await read(client)).content[0].text).context, 'Synthetic installed-package context');
   second = await connect(); await second.listTools();
@@ -102,6 +115,9 @@ try {
   await disconnectClient(config, credential);
   const revoked = await read(second);
   assert.equal(revoked.isError, true);
+  const { profileStore } = await from(plugin, 'helper/src/profile-store.mjs');
+  const switchCall = async (name, args) => JSON.parse((await second.callTool({ name, arguments: args })).content[0].text);
+  await checkProfileSwitch({ call: switchCall, config, browser, extensionId, profiles: profileStore(browser, join(state, `${clientKind}/profiles`)), connectSocket, readFrames, writeFrame, resultChunks, protocol: PROTOCOL });
   await second.close(); second = undefined; stop(); native.destroy(); native = undefined;
   // Stop only this authenticated synthetic broker before uninstalling this isolated fixture.
   process.kill((await brokerReady(config)).pid, 'SIGTERM');
@@ -110,9 +126,9 @@ try {
   await uninstall(state);
   assert.ok((await readdir(state)).includes(clientKind), 'Credentials remain until explicit cleanup.');
   console.log(JSON.stringify({ passed: true, client: clientKind, browser, version: release.version, packageFiles: Object.keys(release.files).length,
-    installedCopy: true, globalNodeRequired: false, setupAppRequired: false, tools: 12, setupStatusWithoutInstallation: true,
+    installedCopy: true, globalNodeRequired: false, setupAppRequired: false, tools: 13, setupStatusWithoutInstallation: true,
     explicitSetupConfirmation: true, cleanInstallViaMcp: true, syntheticPairingCodeAndApproval: true, unconfiguredReadRejected: true, syntheticRead: true,
-    sharedSessionPreserved: true, syntheticWriteDenied: true, scopedDisconnect: true, isolatedUninstall: true,
+    sharedSessionPreserved: true, instanceSwitchAndCancellation: true, syntheticWriteDenied: true, scopedDisconnect: true, isolatedUninstall: true,
     limitation: 'SDK and synthetic native endpoint only; actual AI-client/plugin browser approval acceptance is separate.' }, null, 2));
 } finally {
   await client?.close().catch(() => {}); await second?.close().catch(() => {}); native?.destroy();

@@ -17,7 +17,7 @@ account availability must be verified in Claude Desktop; SDK checks are separate
    restarting the extension (restart Claude if necessary) and connecting tabs
    explicitly. Each browser has a separate private Claude profile.
 4. Start a chat and ask Claude to set up Page as Context for the chosen browser.
-   The server provides twelve setup/page tools and setup instructions through MCP;
+   The server provides setup, cancellation and page tools and setup instructions through MCP;
    this package does not depend on ChatGPT skills.
 
 ## Pair and connect a tab
@@ -46,7 +46,7 @@ default. Claude obtains current connection IDs using `list_shared_tabs` or
 ## Recovery, updates and removal
 
 If setup times out, prepare a new request and review it again. A saved profile
-does not prove browser approval. Wrong instance IDs do not replace profiles.
+does not prove browser approval. A new instance requires a reviewed setup plan and fresh code pairing before activation.
 Do not delete or overwrite credentials to recover silently.
 
 Use browser **Stop all MCP access** or **Revoke** before disabling/removing this
@@ -74,3 +74,20 @@ Desktop MCPB and Code plugin directory have different installation entry points;
 there is one shared server and release version. Desktop and Code keep independent
 credentials (`claude/profiles/` and `claude-code/profiles/`) so either can be
 revoked without affecting the other. One plugin does not imply shared secrets.
+
+
+## Browser instance profiles
+
+To reconnect this client to another instance of the configured browser, prepare
+setup with its instance ID and extension ID, review the switch and confirm it.
+Compare the fresh pairing code and approve in the browser. The new identity is
+activated only after successful pairing; denial, timeout or `cancel_browser_setup`
+keeps the previous profile selected. Profiles are stored separately under
+`profiles/<browser>/instances/<instanceId>/<credentialId>.json`, with an
+`active.json` pointer per browser. Legacy `<browser>.json` remains readable until
+replacement. Other AI clients and browser profiles keep separate credentials.
+
+Pairing alone grants a new Native client no tab access. After approval choose
+**AI: Read** or **AI: Write** again on each source tab, even if it was already
+shared. Manual mode uses **Connect selected tab**. Tab grants, Write, connection
+IDs and session approvals are never copied from the previous instance.

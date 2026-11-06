@@ -23,7 +23,7 @@ This package is not listed in the public plugin directory.
 5. Automatic mode connects the bridge. Use **Retry connection** if setup is still
    pending; only Manual mode needs **Start helper connection**. Compare the code
    from `get_pairing_status` with the browser pairing request and approve yourself.
-   In Automatic, approval includes this app in access to tabs marked Read or Write.
+   Pairing alone grants no tab access. In Automatic, choose Read or Write again on each source tab after approval, even if it was already shared.
 6. On a source tab use the arrows beside **AI Off** to select **Read** or **Write**. Write includes
    reading and supported actions; approvals remain enabled by default. The assistant
    uses `list_shared_tabs` or `resolve_shared_tab` for connection IDs. Manual mode
@@ -46,9 +46,8 @@ are reused. Reconnect tabs explicitly; grants and action references are temporar
 Changed or unrecognized installations are preserved rather than overwritten.
 
 If pairing times out or the client closes, ask to prepare setup again and approve
-the new request. Wrong instance IDs do not replace an existing profile; stop and
-revoke the old client and use the documented developer maintenance route for
-profile changes. The plugin does not expose automatic profile deletion, native
+the new request. To change instances, review a new setup plan and compare its
+fresh pairing code. The previous profile stays selected until pairing succeeds. The plugin does not expose automatic profile deletion, native
 runtime replacement or a general-purpose uninstall tool. A saved profile is not
 proof of browser approval.
 
@@ -77,3 +76,20 @@ until the corresponding client is packaged and tested.
 `marketplace/PACKAGE.json` records package files and hashes. `SHA256SUMS.txt`
 identifies the ZIP. Build, SDK and loader results are separate from actual
 assistant/browser acceptance.
+
+
+## Browser instance profiles
+
+To reconnect this client to another instance of the configured browser, prepare
+setup with its instance ID and extension ID, review the switch and confirm it.
+Compare the fresh pairing code and approve in the browser. The new identity is
+activated only after successful pairing; denial, timeout or `cancel_browser_setup`
+keeps the previous profile selected. Profiles are stored separately under
+`profiles/<browser>/instances/<instanceId>/<credentialId>.json`, with an
+`active.json` pointer per browser. Legacy `<browser>.json` remains readable until
+replacement. Other AI clients and browser profiles keep separate credentials.
+
+Pairing alone grants a new Native client no tab access. After approval choose
+**AI: Read** or **AI: Write** again on each source tab, even if it was already
+shared. Manual mode uses **Connect selected tab**. Tab grants, Write, connection
+IDs and session approvals are never copied from the previous instance.

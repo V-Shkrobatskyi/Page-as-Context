@@ -93,3 +93,20 @@ still require a concrete connection ID and write tools require a fresh snapshot.
 Automatic mode connects the browser after setup; Manual retains Start. The
 browser owns shared-access membership, tab expiry, Pause/Resume and recovery.
 ChatGPT, Claude Desktop and Claude Code use independent profiles/credentials.
+
+
+## Browser instance profiles
+
+To reconnect this client to another instance of the configured browser, prepare
+setup with its instance ID and extension ID, review the switch and confirm it.
+Compare the fresh pairing code and approve in the browser. The new identity is
+activated only after successful pairing; denial, timeout or `cancel_browser_setup`
+keeps the previous profile selected. Profiles are stored separately under
+`profiles/<browser>/instances/<instanceId>/<credentialId>.json`, with an
+`active.json` pointer per browser. Legacy `<browser>.json` remains readable until
+replacement. Other AI clients and browser profiles keep separate credentials.
+
+Pairing alone grants a new Native client no tab access. After approval choose
+**AI: Read** or **AI: Write** again on each source tab, even if it was already
+shared. Manual mode uses **Connect selected tab**. Tab grants, Write, connection
+IDs and session approvals are never copied from the previous instance.

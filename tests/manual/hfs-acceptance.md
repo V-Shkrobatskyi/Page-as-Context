@@ -1,6 +1,6 @@
 # HFS joint acceptance checklist
 
-Use extension 2.2.0, pinned HFS 3.3.4, and a separate HTTP server entry in the AI
+Use extension 2.2.1, pinned HFS 3.3.4, and a separate HTTP server entry in the AI
 host. Record exact host/browser/OS versions and whether tools came from native or
 HTTP. Keep secrets and page contents out of evidence and screenshots.
 

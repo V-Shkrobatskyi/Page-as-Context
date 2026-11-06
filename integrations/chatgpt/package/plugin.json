@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "page-as-context",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Read filtered context and perform explicitly authorized actions in a selected Chrome or Firefox tab.",
   "author": {
     "name": "Vitalii Shkrobatskyi"

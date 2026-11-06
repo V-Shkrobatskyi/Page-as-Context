@@ -74,7 +74,7 @@ try {
     if (request.request.tool === 'list-tools') return { tools: ['list_shared_tabs'] };
     if (request.request.tool === 'list_shared_tabs') return { tabs: [], synthetic: true };
     return { error: 'request-rejected' };
-  }, () => {}, '2.2.0');
+  }, () => {}, '2.2.1');
   polling = (async () => {
     while (!stopped) {
       const { events } = await provider('poll', {}, pollAbort.signal);

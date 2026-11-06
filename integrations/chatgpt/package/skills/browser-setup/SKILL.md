@@ -23,7 +23,7 @@ or approve access. Setup does not grant access to any tab.
    what is pending; avoid a tight polling loop.
 5. When a code is returned, display it and ask the user to compare it with
    the pairing request in **Pairing and clients** on the MCP settings page. Automatic opens this page in an active browser tab for a new request. The user must
-   approve there. In Automatic, approval gives this app access to tabs already marked Read or Write; no extra opt-in is needed. Refresh status is a fallback if the request has not appeared.
+   approve there. Pairing alone grants no tab access. In Automatic, choose Read or Write again on each source tab after approval, even if it was already shared. Refresh status is a fallback if the request has not appeared.
    Never approve pairing through browser automation or on the user's behalf.
 6. Check pairing status again. After approval, have the user open a source tab
    and choose **AI: Read** or **AI: Write** in its popup (Manual: Connect MCP →
@@ -34,8 +34,12 @@ or approve access. Setup does not grant access to any tab.
 
 
 If the app closes during pairing, start a new prepared request. Keep the
-existing profile; never reset or overwrite it automatically. A different
-instance requires explicit profile management outside this setup flow.
+existing profile; never reset or overwrite it automatically. To switch instances,
+prepare setup with the requested instance ID, explain the returned reason and
+previous instance, and obtain explicit confirmation. New credentials are activated
+only after successful code pairing; failure or cancellation keeps the old profile.
+Use `cancel_browser_setup` with the request ID to cancel a prepared or pending
+setup. A switch does not transfer tab grants, Write or session approvals.
 
 This workflow uses standard local MCP tools, not installation hooks. It needs
 local file permissions for browser native-host registration. Report permission

@@ -286,3 +286,11 @@ describe('normalizeChromeAxTree', () => {
     if (!result.ok) expect(result.error.code).toBe('invalid-tree');
   });
 });
+
+
+it.each([undefined, '', 'Name', ' '])('normalizes an AX name consistently without trimming: %j', name => {
+  const result = normalizeChromeAxTree({ nodes: [{ nodeId: 'root', role: { value: 'RootWebArea' }, childIds: ['input'] },
+    { nodeId: 'input', role: { value: 'textbox' }, ...(name === undefined ? {} : { name: { value: name } }) }] });
+  expect(result.ok).toBe(true);
+  if (result.ok) expect(result.tree.root.children[0]!.name).toBe(name === '' ? undefined : name);
+});

@@ -594,9 +594,11 @@ it('shares multiple tabs with one client, discovers IDs and does not reveal unsh
   expect(active.error).toBe('tab-not-shared'); expect(JSON.stringify(active)).not.toContain('Private');
   expect((await call('resolve_shared_tab', { selector: 'only' })).error).toBe('ambiguous-tab');
 });
-it('automatically includes paired clients while keeping independent credentials and scoped revocation', async () => {
+it('requires a fresh tab choice for a new paired client and keeps scoped revocation', async () => {
   await automaticClient(); await share('read');
   await automaticClient('synthetic_client_002', 'b'.repeat(43), false);
+  expect((await call('list_shared_tabs', {}, 'b'.repeat(43), 'synthetic_client_002')).tabs).toEqual([]);
+  await share('read');
   expect((await call('list_shared_tabs', {}, 'b'.repeat(43), 'synthetic_client_002')).tabs).toHaveLength(1);
   const peer = (await call('list_shared_tabs', {}, 'b'.repeat(43), 'synthetic_client_002')).tabs[0];
   await controller.ui({ action: 'revoke', clientId: 'synthetic_client_001' }, page);
@@ -834,7 +836,7 @@ it('enforces Automatic Read only in both popup capabilities and background autho
   expect((await call('list_shared_tabs')).tabs[0].mode).toBe('read-only');
 });
 
-it('selects Read before any client exists and grants access only after matching-code approval', async () => {
+it('requires a new Read choice after matching-code approval when Read was selected before pairing', async () => {
   fixture.stored['mcp-settings-v1'] = { version: 1, enabled: true, connection: 'automatic', mode: 'read-only', inherit: true };
   await share('read');
   expect((await controller.ui({ action: 'popup-read' }, popup)).mode).toBe('read');
@@ -846,6 +848,8 @@ it('selects Read before any client exists and grants access only after matching-
   await expect(controller.ui({ action: 'approve', clientId: 'synthetic_client_001', code: 'WRONG' }, popup)).rejects.toThrow('pairing-expired');
   expect((await call('list_shared_tabs')).error).toBe('request-rejected');
   await controller.ui({ action: 'approve', clientId: 'synthetic_client_001', code: pair.code }, popup);
+  expect((await call('list_shared_tabs')).tabs).toEqual([]);
+  await share('read');
   expect((await call('list_shared_tabs')).tabs).toHaveLength(1);
   expect((await call('list_shared_tabs')).tabs[0].mode).toBe('read-only');
   await share('off');
@@ -1323,4 +1327,35 @@ it('keeps an added client usable for later copying when relay synchronization fa
   fixture.http.route.syncClients.mockRejectedValue(new Error('relay-down'));
   const added = await controller.ui({ action: 'hfs-add-client', name: 'Offline client' }, page) as any;
   expect((await controller.ui({ action: 'hfs-client-value', clientId: added.clientId, field: 'authorization' }, page) as any).value).toMatch(/^Bearer /u);
+});
+
+it('new pairing inherits no old Read/Write tabs or connection approval; a fresh choice affects only that tab', async () => {
+  await automaticClient(); await share('write');
+  const original = (await call('list_shared_tabs')).tabs[0];
+  fixture.api.tabs.get.mockImplementation(async (id: number) => ({ id, url: 'https://example.test/' }));
+  fixture.api.tabs.query.mockResolvedValue([{ id: 8, url: 'https://example.test/' }]);
+  await share('read');
+  await automaticClient('synthetic_client_002', 'b'.repeat(43));
+  expect((await call('list_shared_tabs', {}, 'b'.repeat(43), 'synthetic_client_002')).tabs).toEqual([]);
+  expect((await call('list_shared_tabs')).tabs).toHaveLength(2);
+  expect((fixture.stored['mcp-clients-v1'] as any[]).find(client => client.id === 'synthetic_client_002').explicitTabAccess).toBe(true);
+  fixture.api.tabs.query.mockResolvedValue([{ id: 7, url: 'https://example.test/' }]);
+  await share('read');
+  const tabs = (await call('list_shared_tabs', {}, 'b'.repeat(43), 'synthetic_client_002')).tabs;
+  expect(tabs).toHaveLength(1); expect(tabs[0].mode).toBe('read-only');
+  expect(tabs[0].connectionId).not.toBe(original.connectionId);
+  const state = await controller.ui({ action: 'read' }, page);
+  expect(state.sharedTabs!.flatMap((tab: any) => tab.connections).filter((connection: any) => connection.name === 'Synthetic AI').every((connection: any) => !connection.skipPrompts)).toBe(true);
+  expect((await call('read_page_context', { connectionId: original.connectionId }, 'b'.repeat(43), 'synthetic_client_002')).error).toBe('request-rejected');
+});
+
+it('closing a newly paired candidate without tab grants does not downgrade the old client Write', async () => {
+  await automaticClient(); await share('write');
+  await automaticClient('synthetic_client_002', 'b'.repeat(43));
+  port.postMessage.mockClear();
+  port.onMessage.emit({ type: 'client-disconnected', credentialId: 'synthetic_client_002', credentialSecret: 'b'.repeat(43) });
+  await vi.waitFor(() => expect(port.postMessage).toHaveBeenCalledWith({ type: 'tools-changed', credentialId: 'synthetic_client_002' }));
+  await vi.waitFor(async () => expect((await call('list_shared_tabs')).tabs[0].mode).toBe('read-write'));
+  expect((await controller.ui({ action: 'popup-read' }, popup)).mode).toBe('write');
+  expect((await call('list_shared_tabs', {}, 'b'.repeat(43), 'synthetic_client_002')).tabs).toEqual([]);
 });
