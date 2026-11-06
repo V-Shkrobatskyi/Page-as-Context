@@ -8,8 +8,8 @@ import { parseArgs } from 'node:util';
 
 const repo = fileURLToPath(new URL('../../', import.meta.url));
 const { values } = parseArgs({ options: { archive: { type: 'string' }, output: { type: 'string' }, version: { type: 'string' }, client: { type: 'string', default: 'chatgpt' } } });
-if (!['chatgpt', 'claude-code'].includes(values.client)) throw new Error('Select chatgpt or claude-code.');
-const integration = values.client === 'chatgpt' ? 'chatgpt' : 'claude';
+if (!['chatgpt', 'claude-code', 'antigravity'].includes(values.client)) throw new Error('Select chatgpt, claude-code or antigravity.');
+const integration = values.client === 'claude-code' ? 'claude' : values.client;
 const sourceManifest = JSON.parse(await readFile(join(repo, `integrations/${integration}/package/plugin.json`), 'utf8'));
 values.version ??= sourceManifest.version;
 if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('This package targets macOS Apple silicon only.');
@@ -19,9 +19,10 @@ const archive = resolve(values.archive), output = resolve(values.output);
 const expected = 'fbc3d6e1e1d962450d058e918214373872cc4c46e08673f31c35932afac4a8c5';
 if (digest(await readFile(archive)) !== expected) throw new Error('Official Node archive checksum mismatch.');
 await mkdir(dirname(output), { recursive: true }); await mkdir(output);
-const marketplace = join(output, 'marketplace'), plugin = join(marketplace, 'plugins/page-as-context');
+const marketplace = join(output, values.client === 'antigravity' ? 'bundle' : 'marketplace'), plugin = join(marketplace, 'plugins/page-as-context');
 await mkdir(join(plugin, 'runtime'), { recursive: true });
 await cp(join(repo, `integrations/${integration}/package`), plugin, { recursive: true });
+if (values.client === 'antigravity') await copyFile(join(repo, 'integrations/antigravity/PACKAGE-README.md'), join(plugin, 'README.md'));
 const manifest = JSON.parse(await readFile(join(plugin, 'plugin.json'), 'utf8')); manifest.version = values.version;
 await writeFile(join(plugin, 'plugin.json'), JSON.stringify(manifest, null, 2) + '\n');
 if (values.client === 'claude-code') {
@@ -41,7 +42,7 @@ await writeFile(join(plugin, 'DEPENDENCIES.json'), JSON.stringify({ node: { vers
 if (values.client === 'claude-code') {
   await mkdir(join(marketplace, '.claude-plugin'), { recursive: true });
   await writeFile(join(marketplace, '.claude-plugin/marketplace.json'), JSON.stringify({ name: 'page-as-context-local', owner: { name: 'Vitalii Shkrobatskyi' }, plugins: [{ name: 'page-as-context', source: './plugins/page-as-context' }] }, null, 2) + '\n');
-} else {
+} else if (values.client === 'chatgpt') {
 await mkdir(join(marketplace, '.agents/plugins'), { recursive: true });
 await writeFile(join(marketplace, '.agents/plugins/marketplace.json'), JSON.stringify({ name: 'page-as-context-desktop', interface: { displayName: 'Page as Context' }, plugins: [{ name: 'page-as-context', source: { source: 'local', path: './plugins/page-as-context' }, policy: { installation: 'AVAILABLE', authentication: 'ON_INSTALL' }, category: 'Productivity' }] }, null, 2) + '\n');
 }
@@ -57,7 +58,8 @@ async function inventory(root, prefix = '') {
 await inventory(marketplace);
 await writeFile(join(marketplace, 'PACKAGE.json'), JSON.stringify({ format: 1, version: values.version, platform: 'darwin', arch: 'arm64', files }, null, 2) + '\n');
 await copyFile(join(repo, `integrations/${integration}/PACKAGE-README.md`), join(output, 'README.md'));
-const zip = `Page-as-Context-${values.client === 'chatgpt' ? 'ChatGPT' : 'Claude-Code'}-${values.version}-macOS-arm64-plugin.zip`;
+const label = { chatgpt: 'ChatGPT', 'claude-code': 'Claude-Code', antigravity: 'Antigravity' }[values.client];
+const zip = `Page-as-Context-${label}-${values.version}-macOS-arm64-plugin.zip`;
 execFileSync('/usr/bin/ditto', ['-c', '-k', '--keepParent', marketplace, join(output, zip)]);
 await writeFile(join(output, 'SHA256SUMS.txt'), `${digest(await readFile(join(output, zip)))}  ${zip}\n`);
 console.log(JSON.stringify({ marketplace, archive: join(output, zip), version: values.version, platform: 'macOS arm64', setupApp: false, packageFiles: Object.keys(files).length }));
