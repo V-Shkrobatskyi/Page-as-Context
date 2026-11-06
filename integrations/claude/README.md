@@ -13,9 +13,9 @@ official Node 24.10.0 macOS arm64 archive and pinned MCPB build tooling:
 npm ci --prefix integrations/claude --ignore-scripts
 node scripts/mcp/build-claude-package.mjs \
   --archive /path/to/node-v24.10.0-darwin-arm64.tar.gz \
-  --output 'artifacts/mcp/Claude 0.2.0 macOS arm64'
+  --output 'artifacts/mcp/Claude 0.2.1 macOS arm64'
 node scripts/mcp/check-claude-package.mjs \
-  'artifacts/mcp/Claude 0.2.0 macOS arm64/Page-as-Context-Claude-0.2.0-macOS-arm64.mcpb'
+  'artifacts/mcp/Claude 0.2.1 macOS arm64/Page-as-Context-Claude-0.2.1-macOS-arm64.mcpb'
 ```
 
 The archive's official Node checksum is verified before extraction. Output
@@ -48,8 +48,8 @@ These are SDK/synthetic checks, not actual Claude installation or acceptance.
   built-in Node version is not assumed compatible or used by this package.
   Browser-launched native hosts continue using the stable private runtime
   installed by shared setup, independent of versioned Claude caches.
-- Wrapper paths and display names are fixed: `claude/profiles/{browser}.json`
-  and `Claude — Chrome`/`Claude — Firefox`. Page/setup arguments cannot override
+- Wrapper paths and display names are fixed: `claude/profiles/{browser}/active.json`
+  and `Claude Desktop — Chrome`/`Claude Desktop — Firefox`. Page/setup arguments cannot override
   paths, client identity or browser choice.
 - Setup workflow is supplied through MCP initialization instructions and shared
   tool descriptions, not a ChatGPT-specific skill. Human confirmation, code
@@ -78,13 +78,13 @@ and has not been submitted to a public directory.
 The same `package/` source includes `.claude-plugin/plugin.json` and `.mcp.json`.
 The Desktop entry point selects `--client desktop` by default; the Code manifest
 explicitly selects `--client code`. No model/tool argument selects identity.
-Both formats are version 0.2.0. A root `plugin.json` mirrors plugin identity for
+Both formats are version 0.2.1. A root `plugin.json` mirrors plugin identity for
 the common package inventory verifier; Desktop reads `manifest.json` instead.
 
 ```sh
 node scripts/mcp/build-chatgpt-package.mjs --client claude-code \
   --archive /private/tmp/node-v24.10.0-darwin-arm64.tar.gz \
-  --output 'artifacts/mcp/Claude 0.2.0 plugin macOS arm64'
+  --output 'artifacts/mcp/Claude 0.2.1 plugin macOS arm64'
 ```
 
 Check the extracted marketplace using its bundled `runtime/node` with
@@ -92,3 +92,20 @@ Check the extracted marketplace using its bundled `runtime/node` with
 same invocation with `firefox`. This is isolated SDK evidence, not actual Code
 installation. Official plugin manifest reference reviewed 29 October 2026:
 https://code.claude.com/docs/en/plugins-reference
+
+
+## Browser instance profiles
+
+To reconnect this client to another instance of the configured browser, prepare
+setup with its instance ID and extension ID, review the switch and confirm it.
+Compare the fresh pairing code and approve in the browser. The new identity is
+activated only after successful pairing; denial, timeout or `cancel_browser_setup`
+keeps the previous profile selected. Profiles are stored separately under
+`profiles/<browser>/instances/<instanceId>/<credentialId>.json`, with an
+`active.json` pointer per browser. Legacy `<browser>.json` remains readable until
+replacement. Other AI clients and browser profiles keep separate credentials.
+
+Pairing alone grants a new Native client no tab access. After approval choose
+**AI: Read** or **AI: Write** again on each source tab, even if it was already
+shared. Manual mode uses **Connect selected tab**. Tab grants, Write, connection
+IDs and session approvals are never copied from the previous instance.

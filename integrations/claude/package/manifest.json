@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "page-as-context",
   "display_name": "Page as Context",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Read filtered context and perform explicitly authorized actions in a connected Chrome or Firefox tab.",
   "long_description": "Private macOS Apple silicon desktop extension. Select chrome or firefox, then ask Claude to set up that browser. Review local setup changes, compare the pairing code and approve in the browser popup. In Automatic mode choose AI: Read or Write on each tab. Includes its Node runtime; no terminal or separate setup app is needed.",
   "author": {
