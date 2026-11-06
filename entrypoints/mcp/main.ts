@@ -134,7 +134,7 @@ async function load() {
   get('managed-filters').textContent = `Required built-in filters: ${result.requiredBuiltinFilters.length ? result.requiredBuiltinFilters.join(', ') : 'none'} · Managed custom rules: ${result.managedRuleCount}. Mandatory rules cannot be disabled here.`;
   get('transport').textContent = `Helper: ${result.transports?.native ?? result.transport}`;
   if (!loaded) { status.textContent = result.settings.enabled ? 'MCP is enabled. Connect an AI app and share a tab.' : 'MCP is off. Local output tests remain available when permitted.'; loaded = true; }
-  get('instance').textContent = `Browser: ${result.browser} · Instance: ${result.instanceId}`;
+  get('instance').textContent = `Browser: ${result.browser} · Instance: ${result.instanceId} · Extension ID: ${browser.runtime.id}`;
   if (!modified) {
     const settings = result.settings as McpSettings, preferences = result.preferences;
     get<HTMLInputElement>('enabled').checked = settings.enabled;
@@ -191,7 +191,9 @@ async function load() {
     actions.classList.add('pairing-actions');
     const information = document.createElement('div'); information.className = 'pairing-info';
     const label = document.createElement('label'), shared = document.createElement('input'); shared.type = 'checkbox'; label.append(shared, ' Include this app in shared tab access');
-    if (!automatic) { information.append(label); row.querySelector('.client-identity')!.append(information); }
+    if (!automatic) information.append(label);
+    else information.textContent = 'Pairing grants no tab access. Afterwards choose AI: Read or Write again in the source tab popup to include this app.';
+    row.querySelector('.client-identity')!.append(information);
     const approve = button('Approve pairing', async () => { await request('approve', { clientId: value.id, code: value.code, shared: shared.checked }); await load(); }); approve.className = 'primary-action'; approve.disabled = locked; actions.append(approve, button('Deny', async () => { await request('deny', { clientId: value.id }); await load(); })); return row;
   }));
   if (!result.pending.length) get('pairing').append(emptyState('No pending pairing requests.'));

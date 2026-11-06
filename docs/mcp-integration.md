@@ -24,9 +24,10 @@ code or mandatory export; a new HTTP client receives at most Read until a new
 explicit Write choice. See [HFS setup](hfs-integration.md). Automatic opens the Pairing and clients section in an active browser
 tab for a new request, reusing its pairing tab for later requests. Repeated
 polling of the same request does not open more tabs. The popup only shows a
-pending indicator; use its MCP footer link to reopen settings if needed. Approval gives that client
-access to all tabs marked Read or Write; there is no separate shared-access
-checkbox. Previously approved clients also participate automatically. Unknown
+pending indicator; use its MCP footer link to reopen settings if needed. Pairing approval alone gives a new Native client no tab access. After approval,
+choose Read or Write again in each source tab popup to include that client, even
+if the tab was already shared. Existing client grants remain unchanged. Legacy
+clients retain their existing sharing behavior. Unknown
 clients cannot discover or read tabs. Revoke removes one client's access; Off
 removes every client's access to that tab. Ask before each action remains the
 default, and adding a client never inherits another client's session approval.
@@ -357,3 +358,24 @@ installation. Native remains available; existing settings do not enable HTTP.
 Both routes use the same browser policy, privacy filters, tab grants and action
 approvals. HTTP diagnostics show connection state without secrets or page metadata.
 See [HFS setup, trust boundary and verification limits](hfs-integration.md).
+
+
+### Switching a plugin to another browser instance
+
+Call `prepare_browser_setup` with the new instance ID and review its explanation
+and changes. After explicit confirmation, `confirm_browser_setup` creates fresh
+credentials and starts code pairing. Only successful pairing activates the new
+profile. `cancel_browser_setup` cancels a prepared or pending request; denial,
+timeout and activation failure leave the previous profile selected. At the
+activation commit boundary, cancellation waits and reports the committed result.
+If the browser approved pairing but local activation failed, revoke the unused
+pairing in the browser before retrying.
+
+Profiles are isolated by client, browser and instance under
+`<client>/profiles/<browser>/instances/<instanceId>/<credentialId>.json`.
+`<browser>/active.json` selects the last successfully paired identity. Legacy
+`<browser>.json` credentials remain readable until replacement; they are archived
+when setup creates a candidate. A pending candidate never becomes the selected
+profile through discovery. A running plugin notices selection changes without an
+MCP restart. Old connection IDs, snapshots, Write and session approvals are not
+transferred, and in-flight actions are never replayed on the new instance.

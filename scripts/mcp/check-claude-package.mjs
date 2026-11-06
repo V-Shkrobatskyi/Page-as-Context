@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Vitalii Shkrobatskyi; SPDX-License-Identifier: GPL-3.0-only
 import assert from 'node:assert/strict';
+import { checkProfileSwitch } from './check-profile-switch.mjs';
 import { mkdtemp, readFile, readdir, lstat, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -9,6 +10,14 @@ import { unpackExtension, VERSIONED_MANIFEST_SCHEMAS } from '../../integrations/
 
 if (!process.argv[2]) throw new Error('Pass the built .mcpb archive. This check never installs it into Claude.');
 const archive = resolve(process.argv[2]);
+async function waitBroker(config, brokerReady) {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    try { return await brokerReady(config); }
+    catch (error) { if (!['broker-unavailable', 'ENOENT', 'ECONNREFUSED'].includes(error.message) && !['ENOENT', 'ECONNREFUSED'].includes(error.code)) throw error; }
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  throw new Error('Setup did not start the broker.');
+}
 const root = await mkdtemp('/private/tmp/pac-claude-check-');
 const installed = join(root, 'installed copy with spaces');
 const from = path => import(pathToFileURL(join(installed, path)));
@@ -76,7 +85,7 @@ try {
       assert.equal(client.getServerVersion().version, manifest.version);
       assert.match(client.getInstructions(), new RegExp(`configured for ${browser}`, 'u'));
       assert.match(client.getInstructions(), /explicit user approval before confirm_browser_setup/u);
-      assert.equal((await client.listTools()).tools.length, 12);
+      assert.equal((await client.listTools()).tools.length, 9);
       const call = async (name, args = {}) => JSON.parse((await client.callTool({ name, arguments: args })).content[0].text);
       const initial = await call('setup_status');
       assert.equal(initial.nativeInstalled, false); assert.equal(initial.profileConfigured, false, 'Never adopt ChatGPT credentials.');
@@ -87,10 +96,12 @@ try {
       assert.deepEqual(await readdir(state), ['chatgpt']);
       assert.equal((await call('confirm_browser_setup', { requestId: plan.requestId, confirmed: false })).error, 'setup-confirmation-required');
       assert.equal((await call('confirm_browser_setup', { requestId: plan.requestId, confirmed: true })).error, undefined);
-      const credential = await privateJson(join(state, `claude/profiles/${browser}.json`));
+      const pendingDirectory = join(state, `claude/profiles/${browser}/instances/${instanceId}`);
+      const [pendingFile] = await readdir(pendingDirectory);
+      const credential = await privateJson(join(pendingDirectory, pendingFile));
       assert.notEqual(credential.credentialId, decoy.credentialId); assert.notEqual(credential.secret, decoy.secret);
       assert.deepEqual(await readFile(join(chatgpt, `${browser}.json`)), decoyBytes);
-      await client.listTools(); config = await configuration(state); await brokerReady(config);
+      await client.listTools(); config = await configuration(state); await waitBroker(config, brokerReady);
       native = await connectSocket(config.socket);
       let approved = false, ready;
       const nativeReady = new Promise(resolve => { ready = resolve; });
@@ -123,7 +134,9 @@ try {
       assert.equal((await call('read_page_context', { connectionId: 'synthetic_connection_001' })).context, `Synthetic ${browser} installed-copy context`);
       const rejection = await call('click_element', { connectionId: 'synthetic_connection_001', snapshotId: randomUUID(), elementRef: randomUUID(), operationId: randomUUID() });
       assert.equal(rejection.error, 'approval-denied');
-      results.push({ browser, tools: 12, cleanIsolatedSetup: true, chatgptProfileUntouched: true, syntheticPairingReadWriteDenial: true });
+      const { profileStore } = await from('helper/src/profile-store.mjs');
+      await checkProfileSwitch({ call, config, browser, extensionId, profiles: profileStore(browser, join(state, 'claude/profiles')), connectSocket, readFrames, writeFrame, resultChunks, protocol: PROTOCOL });
+      results.push({ browser, tools: 13, cleanIsolatedSetup: true, instanceSwitchAndCancellation: true, chatgptProfileUntouched: true, syntheticPairingReadWriteDenial: true });
     } finally {
       await client?.close().catch(() => {}); native?.destroy();
       if (config) await stopOwnedBroker(config);

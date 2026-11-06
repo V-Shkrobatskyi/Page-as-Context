@@ -13,6 +13,7 @@ if (positionals.length !== 1) throw new Error('Select chrome or firefox.');
 if (values['manifest-home'] && !values.directory) throw new Error('Isolated manifests require an explicit state directory.');
 const manifest = JSON.parse(await readFile(new URL('./plugin.json', import.meta.url), 'utf8'));
 const directory = values.directory ?? defaultDirectory(), profileDirectory = join(directory, 'chatgpt/profiles');
-const setup = browserSetup({ browser: positionals[0], directory, profileDirectory, clientName: `ChatGPT — ${positionals[0] === 'chrome' ? 'Chrome' : 'Firefox'}`,
+const bridge = packageClient(positionals[0], directory, profileDirectory);
+const setup = browserSetup({ browser: positionals[0], directory, profileDirectory, onActivated: () => bridge.refresh(), clientName: `ChatGPT — ${positionals[0] === 'chrome' ? 'Chrome' : 'Firefox'}`,
   licensePath: fileURLToPath(new URL('./runtime/LICENSE', import.meta.url)), installOptions: values['manifest-home'] ? { manifestHome: values['manifest-home'] } : {} });
-await serveMcp(undefined, undefined, process.stdin, process.stdout, false, { bridge: packageClient(positionals[0], directory, profileDirectory), setup, version: manifest.version });
+await serveMcp(undefined, undefined, process.stdin, process.stdout, false, { bridge, setup, version: manifest.version });

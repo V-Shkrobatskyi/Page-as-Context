@@ -43,7 +43,7 @@ lines.on('line', line => {
       assert.equal(own.length, 2, 'The app-server must discover both browser servers for this plugin.');
       for (const server of own) {
         assert.equal(server.toolsError, null);
-        assert.deepEqual(Object.keys(server.tools).sort(), ['click_element', 'confirm_browser_setup', 'fill_element', 'get_connection_status', 'get_pairing_status', 'prepare_browser_setup', 'read_page_context', 'select_option', 'set_checked', 'setup_status']);
+        assert.deepEqual(Object.keys(server.tools).sort(), ['cancel_browser_setup', 'click_element', 'confirm_browser_setup', 'fill_element', 'get_connection_status', 'get_pairing_status', 'list_shared_tabs', 'prepare_browser_setup', 'read_page_context', 'resolve_shared_tab', 'select_option', 'set_checked', 'setup_status']);
         assert.equal(server.serverInfo.version, pluginVersion);
       }
       console.log(JSON.stringify({ clientToolDiscovery: true, servers: own.map(server => ({ name: server.name, version: server.serverInfo.version, tools: Object.keys(server.tools).sort() })) }, null, 2));

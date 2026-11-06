@@ -103,7 +103,7 @@ test('native compatible update preserves installation identity and detects forei
 test('unconfigured package client never creates credentials or registers a native host', async t => {
   const directory = join(await temp(t), 'unconfigured'), client = packageClient('firefox', directory); t.after(() => client.close());
   await assert.rejects(client.request({ tool: 'read_page_context', arguments: { connectionId: 'synthetic_connection' } }));
-  assert.deepEqual(await readdir(directory), []);
+  await assert.rejects(readdir(directory), { code: 'ENOENT' });
 });
 
 
