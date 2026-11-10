@@ -1,3 +1,4 @@
+import { packageUserGuide } from './package-user-guide.mjs';
 // Copyright (c) 2026 Vitalii Shkrobatskyi; SPDX-License-Identifier: GPL-3.0-only
 import { readFile, writeFile, mkdir, cp, copyFile, chmod, lstat, readdir } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
@@ -30,7 +31,9 @@ for (const name of ['package.json', 'package-lock.json', 'LICENSE', 'MCP_SDK_LIC
 }
 await cp(join(repo, 'helper/src'), join(bundle, 'helper/src'), { recursive: true });
 execFileSync('npm', ['ci', '--prefix', join(bundle, 'helper'), '--omit=dev', '--ignore-scripts', '--bin-links=false', '--offline', '--no-audit', '--no-fund'], { stdio: 'pipe' });
-await copyFile(join(repo, 'integrations/claude/PACKAGE-README.md'), join(bundle, 'README.md'));
+const userGuide = await packageUserGuide(repo, 'claude');
+await writeFile(join(bundle, 'README.md'), userGuide);
+await writeFile(join(output, 'README.md'), userGuide);
 await copyFile(join(repo, 'helper/LICENSE'), join(bundle, 'LICENSE'));
 // Preserve the exact dependency lock even though the packer excludes package-lock.json.
 await copyFile(join(repo, 'helper/package-lock.json'), join(bundle, 'DEPENDENCY-LOCK.json'));

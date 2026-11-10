@@ -1,3 +1,4 @@
+import { packageUserGuide } from './package-user-guide.mjs';
 // Copyright (c) 2026 Vitalii Shkrobatskyi; SPDX-License-Identifier: GPL-3.0-only
 import { readFile, writeFile, mkdir, cp, copyFile, chmod, lstat, readdir } from 'node:fs/promises';
 import { resolve, join, dirname } from 'node:path';
@@ -22,7 +23,8 @@ await mkdir(dirname(output), { recursive: true }); await mkdir(output);
 const marketplace = join(output, values.client === 'antigravity' ? 'bundle' : 'marketplace'), plugin = join(marketplace, 'plugins/page-as-context');
 await mkdir(join(plugin, 'runtime'), { recursive: true });
 await cp(join(repo, `integrations/${integration}/package`), plugin, { recursive: true });
-if (values.client === 'antigravity') await copyFile(join(repo, 'integrations/antigravity/PACKAGE-README.md'), join(plugin, 'README.md'));
+const userGuide = await packageUserGuide(repo, integration);
+await writeFile(join(plugin, 'README.md'), userGuide);
 const manifest = JSON.parse(await readFile(join(plugin, 'plugin.json'), 'utf8')); manifest.version = values.version;
 await writeFile(join(plugin, 'plugin.json'), JSON.stringify(manifest, null, 2) + '\n');
 if (values.client === 'claude-code') {
@@ -57,7 +59,7 @@ async function inventory(root, prefix = '') {
 }
 await inventory(marketplace);
 await writeFile(join(marketplace, 'PACKAGE.json'), JSON.stringify({ format: 1, version: values.version, platform: 'darwin', arch: 'arm64', files }, null, 2) + '\n');
-await copyFile(join(repo, `integrations/${integration}/PACKAGE-README.md`), join(output, 'README.md'));
+await writeFile(join(output, 'README.md'), userGuide);
 const label = { chatgpt: 'ChatGPT', 'claude-code': 'Claude-Code', antigravity: 'Antigravity' }[values.client];
 const zip = `Page-as-Context-${label}-${values.version}-macOS-arm64-plugin.zip`;
 execFileSync('/usr/bin/ditto', ['-c', '-k', '--keepParent', marketplace, join(output, zip)]);
