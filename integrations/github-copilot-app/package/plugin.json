@@ -1,0 +1,10 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "page-as-context",
+  "version": "1.2.2",
+  "description": "Connect GitHub Copilot app local sessions to explicitly shared Chrome or Firefox tabs.",
+  "author": {
+    "name": "Vitalii Shkrobatskyi"
+  },
+  "license": "GPL-3.0-only"
+}

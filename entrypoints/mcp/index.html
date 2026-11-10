@@ -121,7 +121,7 @@
         <h2 id="connection-heading">Helper connection</h2>
         <div class="settings-panel">
           <label class="check-option"><input id="native-enabled" type="checkbox" form="preferences" checked /><span>Enable native helper connections</span></label>
-          <p class="note">For the existing ChatGPT and Claude plugins.</p>
+          <p class="note">For Page as Context plugins in supported local AI apps.</p>
           <div class="apply-bar">
             <button type="submit" form="preferences" id="apply-native" class="primary-action">Apply settings</button>
             <span id="draft-state-native" class="note" role="status">Applied</span>
@@ -131,11 +131,12 @@
             <div class="action-group">
               <button id="start" class="primary-action" type="button" disabled>Start helper connection</button>
               <button id="refresh" type="button">Refresh status</button><button id="pause" type="button">Pause all</button>
+              <button id="copy-instance" type="button" title="Copy browser, instance and extension IDs for AI app setup" disabled>Copy setup info</button>
             </div>
           </div>
           <details class="connection-details">
             <summary>Setup and browser instance</summary>
-            <p class="note">Ask the Page as Context plugin in your AI client to set up this browser. Review the setup plan, then compare the pairing code from the chat with the request below. Automatic mode connects the browser bridge after setup; Manual mode requires Start helper connection. Follow the <a href="/guide.html#mcp-integration">local setup guide</a> or the <a href="https://github.com/V-Shkrobatskyi/Page-as-Context/blob/main/docs/mcp-integration.md" target="_blank" rel="noopener noreferrer">full setup instructions ↗</a>. Use this instance when pairing a client.</p>
+            <p class="note">Use <strong>Copy setup info</strong> above when asking your AI app to connect this browser. Review the setup plan, then compare the chat's pairing code with the request below and approve it yourself. Pairing alone does not share tabs. See the <a href="/guide.html#mcp-integration">quick start</a> or choose your app in the <a href="https://github.com/V-Shkrobatskyi/Page-as-Context/blob/main/docs/mcp-integration.md" target="_blank" rel="noopener noreferrer">plugin installation guides ↗</a>.</p>
             <p id="instance" class="instance-id"></p>
           </details>
         </div>

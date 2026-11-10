@@ -11,7 +11,7 @@ import { spawnSync } from 'node:child_process';
 const source = resolve(process.argv[2] ?? '');
 if (!process.argv[2]) throw new Error('Pass the built marketplace folder. Run this check with its bundled runtime/node.');
 const clientKind = process.argv[3] ?? 'chatgpt', browser = process.argv[4] ?? 'chrome';
-assert.ok(['chatgpt', 'claude-code', 'antigravity'].includes(clientKind)); assert.ok(['chrome', 'firefox'].includes(browser));
+assert.ok(['chatgpt', 'claude-code', 'antigravity', 'github-copilot-app'].includes(clientKind)); assert.ok(['chrome', 'firefox'].includes(browser));
 const extensionId = browser === 'chrome' ? 'a'.repeat(32) : 'page-as-context@synthetic.test';
 const originalPlugin = join(source, 'plugins/page-as-context');
 const from = (root, path) => import(pathToFileURL(join(root, path)));
@@ -92,7 +92,7 @@ try {
   assert.equal(plan.confirmationRequired, true);
   assert.deepEqual(await readdir(state).catch(error => { if (error.code === 'ENOENT') return []; throw error; }), []);
   assert.equal((await call('confirm_browser_setup', { requestId: plan.requestId, confirmed: false })).error, 'setup-confirmation-required');
-  if (clientKind === 'antigravity') {
+  if (['antigravity', 'github-copilot-app'].includes(clientKind)) {
     for (const other of ['chatgpt', 'claude', 'claude-code']) {
       const directory = await privateDirectory(join(state, other, 'profiles'));
       const path = join(directory, 'unrelated-profile.json');

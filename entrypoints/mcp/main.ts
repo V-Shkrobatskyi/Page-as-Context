@@ -135,6 +135,7 @@ async function load() {
   get('transport').textContent = `Helper: ${result.transports?.native ?? result.transport}`;
   if (!loaded) { status.textContent = result.settings.enabled ? 'MCP is enabled. Connect an AI app and share a tab.' : 'MCP is off. Local output tests remain available when permitted.'; loaded = true; }
   get('instance').textContent = `Browser: ${result.browser} · Instance: ${result.instanceId} · Extension ID: ${browser.runtime.id}`;
+  get<HTMLButtonElement>('copy-instance').disabled = false;
   if (!modified) {
     const settings = result.settings as McpSettings, preferences = result.preferences;
     get<HTMLInputElement>('enabled').checked = settings.enabled;
@@ -367,6 +368,18 @@ get('hfs-retry').addEventListener('click', () => {
 get('pause').addEventListener('click', () => void run(async () => { await request(get('pause').dataset.paused === 'true' ? 'resume' : 'pause'); await load(); }));
 get('stop').addEventListener('click', () => void run(async () => { clear(); await request('stop'); await load(); status.textContent = 'MCP access stopped. Previously delivered data cannot be recalled.'; }));
 get('refresh').addEventListener('click', () => void run(load));
+get('copy-instance').addEventListener('click', () => {
+  const info = get('instance').textContent;
+  if (!info) return;
+  void (async () => {
+    try {
+      await navigator.clipboard.writeText(info);
+      status.textContent = 'Browser setup info copied.';
+    } catch {
+      status.textContent = 'Could not copy setup info. Check clipboard access or copy it from Setup and browser instance.';
+    }
+  })();
+});
 get('test').addEventListener('click', () => void run(async () => {
   clear(); const ticket = generation;
   const result = await request('test', { sourceId, ...(modified ? { draft: draft() } : {}) });
