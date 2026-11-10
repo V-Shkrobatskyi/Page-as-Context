@@ -20,7 +20,7 @@ locked helper production dependencies:
 ```sh
 node scripts/mcp/build-antigravity-package.mjs \
   --archive /private/tmp/node-v24.10.0-darwin-arm64.tar.gz \
-  --output 'artifacts/mcp/Antigravity 0.1.1 macOS arm64'
+  --output 'artifacts/mcp/Antigravity 1.2.2 macOS arm64'
 ```
 
 Output directories must be new. The shared builder checks the Node archive hash,
@@ -90,8 +90,17 @@ Official documentation reviewed 6 November 2026:
 ## Initial setup prompt
 
 The [package guide](PACKAGE-README.md#connect-a-browser) includes copyable Chrome
-and Firefox prompts with browser, instanceId and extensionId. Version 0.1.1
+and Firefox prompts with browser, instanceId and extensionId. Version 1.2.2
 updates both the setup skill and MCP initialization instructions to consume
 valid supplied IDs without redundant questions and run status/preparation in
 one response. Approval of the returned plan and browser code comparison remain
 separate user steps. This changes setup guidance, not the permission model.
+
+## Aligned release 1.2.2
+
+This release aligns the four client package versions and ships the revised user
+guide inside each package, with web links that work outside the source checkout.
+The unpacked distribution checks passed on 9 November 2026. These are SDK and
+synthetic-endpoint checks, not a new live-browser qualification of 1.2.2. Prior
+live evidence retains its original package version. Existing installed packages
+are not modified or automatically upgraded.

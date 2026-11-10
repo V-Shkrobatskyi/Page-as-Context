@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.2 — unreleased
+
+- Distinguish app plugins with a native helper from the universal Local HTTP (HFS) MCP server in the bundled guide, with separate setup links and connection requirements.
+- Align ChatGPT, Claude Desktop/Code, Antigravity and GitHub Copilot app packages at 1.2.2, shipping the streamlined English guides with web links usable outside the repository. Keep existing installed releases intact.
+- Add Copy setup info to MCP Helper connection controls, copying Browser, Instance and Extension ID without expanding setup details, with success and clipboard-error feedback.
+- Add the private GitHub Copilot app plugin with separate client profiles, bundled runtime and local marketplace installation. Record user-verified Chrome pairing, read/write, restart downgrade, revocation and re-pairing; Firefox live acceptance remains untested.
+- Simplify the shared MCP user guide, move developer setup and maintenance into a separate reference, and shorten client installation guides. Keep one copyable pairing request with setup info appended at the end.
+- Synchronize extension release metadata and privacy version/date for 2.2.2. Client package versions are aligned separately at 1.2.2; the helper version is unchanged.
+
 ## 2.2.1 — unreleased
 
 - Normalize empty Chrome accessibility names consistently during capture and action validation, preventing false stale-snapshot rejections for unnamed controls. Custom editors still need a supported input mechanism.

@@ -19,7 +19,7 @@ is involved. End users do not need the build tools or a globally installed Node.
 ```sh
 node scripts/mcp/build-chatgpt-package.mjs \
   --archive /path/to/node-v24.10.0-darwin-arm64.tar.gz \
-  --output 'artifacts/mcp/ChatGPT plugin 1.2.1'
+  --output 'artifacts/mcp/ChatGPT plugin 1.2.2'
 ```
 
 The default version comes from `package/plugin.json`. The output contains
@@ -33,9 +33,9 @@ not submitted to a public directory.
 ## Verify the installed copy
 
 ```sh
-'artifacts/mcp/ChatGPT plugin 1.2.1/marketplace/plugins/page-as-context/runtime/node' \
+'artifacts/mcp/ChatGPT plugin 1.2.2/marketplace/plugins/page-as-context/runtime/node' \
   scripts/mcp/check-chatgpt-package.mjs \
-  'artifacts/mcp/ChatGPT plugin 1.2.1/marketplace'
+  'artifacts/mcp/ChatGPT plugin 1.2.2/marketplace'
 node scripts/mcp/inspect-chatgpt-package.mjs \
   "$HOME/.page-as-context/chatgpt/.agents/plugins/marketplace.json"
 ```
@@ -87,3 +87,12 @@ Pairing alone grants a new Native client no tab access. After approval choose
 **AI: Read** or **AI: Write** again on each source tab, even if it was already
 shared. Manual mode uses **Connect selected tab**. Tab grants, Write, connection
 IDs and session approvals are never copied from the previous instance.
+
+## Aligned release 1.2.2
+
+This release aligns the four client package versions and ships the revised user
+guide inside each package, with web links that work outside the source checkout.
+The unpacked distribution checks passed on 9 November 2026. These are SDK and
+synthetic-endpoint checks, not a new live-browser qualification of 1.2.2. Prior
+live evidence retains its original package version. Existing installed packages
+are not modified or automatically upgraded.

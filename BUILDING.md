@@ -19,8 +19,8 @@ npm run zip:firefox
 ```
 
 The installed extension files are in `.output/firefox-mv3/`. The unsigned archive
-is `.output/page-as-context-2.2.1-firefox.zip`; the accompanying source archive is
-`.output/page-as-context-2.2.1-sources.zip`. Filenames use the package version, so
+is `.output/page-as-context-2.2.2-firefox.zip`; the accompanying source archive is
+`.output/page-as-context-2.2.2-sources.zip`. Filenames use the package version, so
 they change when the version changes. Compare uncompressed file paths and bytes
 with the submitted extension ZIP; ZIP container timestamps are not build content.
 
@@ -52,7 +52,7 @@ Full contributor checks run from the repository with `npm run check`.
 npm run zip
 ```
 
-The Chrome package is `.output/page-as-context-2.2.1-chrome.zip`, built from
+The Chrome package is `.output/page-as-context-2.2.2-chrome.zip`, built from
 `.output/chrome-mv3/`. Upload the extension ZIP, not the reviewer sources.
 
 ## Shared Firefox Desktop and Android package
@@ -77,8 +77,9 @@ Build commands produce unsigned packages. Publishing and signing are covered in
 
 ## Simplified MCP packages
 
-ChatGPT source version is 1.2.0; the shared Claude integration is 0.2.0
-for both Desktop and Code, with client-specific installation manifests. The common helper is 0.2.0. Use the existing
+ChatGPT, Claude Desktop/Code, Antigravity and GitHub Copilot app packages are
+aligned at **1.2.2**. The browser extension is **2.2.2** and the common helper
+remains **0.2.0**. Client profiles and installation formats remain separate. Use the existing
 ChatGPT builder with `--client claude-code` for the Claude Code package; see
 [integration build notes](integrations/claude/README.md). All packages use
 the same checksum-verified Node 24.10.0 archive. Icon variants can be regenerated
