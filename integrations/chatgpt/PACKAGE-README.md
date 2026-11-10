@@ -1,10 +1,8 @@
 # Page as Context for ChatGPT desktop
 
-Private macOS Apple silicon plugin. Requires macOS 13.5 or newer and Page as
-Context in Chrome and/or Firefox. Local plugins must be permitted by your
-workspace. The validation machine runs macOS 15.8.1; 13.5 is the bundled runtime
-binary minimum, not a claim that every intermediate macOS release was tested.
-This package is not listed in the public plugin directory.
+Private plugin for macOS Apple silicon (macOS 13.5+). Requires the browser
+extension and a workspace that permits local plugins. Includes its runtime;
+no global Node or separate setup app is needed.
 
 ## Install and pair
 
@@ -13,9 +11,10 @@ This package is not listed in the public plugin directory.
    Use the full plugin, not the historical **Installation check** plugin.
 2. In the browser extension, open **MCP settings**, enable MCP and apply settings.
    Ask the assistant to set up Page as Context for Chrome or Firefox.
-3. Provide the **Browser instance** ID shown on the MCP page and the installed
-   extension ID. Chrome's ID is shown in `chrome://extensions`; Firefox uses
-   `{e97aa566-cac0-4e2c-81f7-0ab664bf86ce}`, not the UUID in its extension URL.
+3. In MCP settings use **Helper connection → Copy setup info** and give the
+   copied Browser, Instance and Extension ID to the assistant. Older builds show
+   the same line under **Setup and browser instance**. Firefox needs the add-on's
+   Gecko ID shown there, not the UUID in its extension URL.
 4. Review the changes returned by `prepare_browser_setup` and explicitly approve
    them before the assistant calls `confirm_browser_setup`. Keep the client's
    confirmation prompt enabled for this tool. Adding a second browser may
@@ -29,67 +28,13 @@ This package is not listed in the public plugin directory.
    uses `list_shared_tabs` or `resolve_shared_tab` for connection IDs. Manual mode
    retains **Connect MCP → Connect selected tab**; discovery also works there.
 
+## After installation
 
-Setup runs through the plugin; there is no separate setup application. The
-package contains its Node runtime, production dependencies and license notices.
-No global Node/npm, development checkout, startup downloads, HTTP listener, login
-service or broker terminal is needed for normal use. Browser native messaging
-still requires a registered local bridge, installed after explicit confirmation.
-Never copy credential files into chat. Your client may forward shared context
-to its model provider.
+Use the [pairing request and connection steps](../../docs/mcp-integration.md#copy-and-paste-pairing-messages).
+Shared access controls, reconnect and troubleshooting are in the [MCP user guide](../../docs/mcp-integration.md).
 
-## Updates and recovery
+## Update or remove
 
-Install the new plugin version through its private catalog and restart the
-desktop client. Existing compatible browser registrations and private profiles
-are reused. Reconnect tabs explicitly; grants and action references are temporary.
-Changed or unrecognized installations are preserved rather than overwritten.
-
-If pairing times out or the client closes, ask to prepare setup again and approve
-the new request. To change instances, review a new setup plan and compare its
-fresh pairing code. The previous profile stays selected until pairing succeeds. The plugin does not expose automatic profile deletion, native
-runtime replacement or a general-purpose uninstall tool. A saved profile is not
-proof of browser approval.
-
-## Disable and removal
-
-Use **Stop all MCP access** or **Revoke** in the extension to end access. Disable
-or remove the plugin in the desktop client, then restart it; existing sessions
-may retain tools until closed. Removal does not automatically erase the shared
-bridge or private credentials, and no uninstall hook is assumed.
-
-For developer cleanup of a bridge that no client needs, see
-[local maintenance](../../docs/mcp-integration.md#removal-and-recovery). Removing
-a local plugin catalog must affect only Page as Context; preserve other plugins.
-Old downloaded application bundles and old package releases are not removed by
-this package. Do not delete the current registered plugin source or the shared
-runtime to remove an obsolete installer.
-
-## Scope and verification
-
-Manual servers named `page-as-context-chrome`/`page-as-context-firefox` and the
-content-free spike are independent. They are not removed silently. For acceptance
-use only this plugin's browser servers. Claude, Windows, Linux and Android
-packages are not included; standard MCP compatibility does not establish support
-until the corresponding client is packaged and tested.
-
-`marketplace/PACKAGE.json` records package files and hashes. `SHA256SUMS.txt`
-identifies the ZIP. Build, SDK and loader results are separate from actual
-assistant/browser acceptance.
-
-
-## Browser instance profiles
-
-To reconnect this client to another instance of the configured browser, prepare
-setup with its instance ID and extension ID, review the switch and confirm it.
-Compare the fresh pairing code and approve in the browser. The new identity is
-activated only after successful pairing; denial, timeout or `cancel_browser_setup`
-keeps the previous profile selected. Profiles are stored separately under
-`profiles/<browser>/instances/<instanceId>/<credentialId>.json`, with an
-`active.json` pointer per browser. Legacy `<browser>.json` remains readable until
-replacement. Other AI clients and browser profiles keep separate credentials.
-
-Pairing alone grants a new Native client no tab access. After approval choose
-**AI: Read** or **AI: Write** again on each source tab, even if it was already
-shared. Manual mode uses **Connect selected tab**. Tab grants, Write, connection
-IDs and session approvals are never copied from the previous instance.
+Install a new version through the private catalog and restart ChatGPT.
+To remove it, revoke its client in the browser, remove the plugin and restart
+the app. Keep the shared bridge and other clients' profiles intact.

@@ -66,8 +66,9 @@ SPDX-License-Identifier: GPL-3.0-only
             </li>
             <li class="toc-group"><a href="#mcp-heading">MCP</a>
               <ul>
-                <li><a href="#mcp-connect-heading">Connect your AI assistant</a></li>
-                <li><a href="#mcp-modes-heading">Automatic and Manual connections</a></li>
+                <li><a href="#mcp-connect-heading">Two ways to connect</a></li>
+                <li><a href="#mcp-plugin-start-heading">Plugin quick start</a></li>
+                <li><a href="#mcp-modes-heading">Connections and access</a></li>
               </ul>
             </li>
             <li class="toc-group"><a href="#help-links">Help and links</a>
@@ -106,8 +107,9 @@ SPDX-License-Identifier: GPL-3.0-only
             </li>
             <li class="toc-group"><a href="#mcp-heading">MCP</a>
               <ul>
-                <li><a href="#mcp-connect-heading">Connect your AI assistant</a></li>
-                <li><a href="#mcp-modes-heading">Automatic and Manual connections</a></li>
+                <li><a href="#mcp-connect-heading">Two ways to connect</a></li>
+                <li><a href="#mcp-plugin-start-heading">Plugin quick start</a></li>
+                <li><a href="#mcp-modes-heading">Connections and access</a></li>
               </ul>
             </li>
             <li class="toc-group"><a href="#help-links">Help and links</a>
@@ -253,24 +255,35 @@ SPDX-License-Identifier: GPL-3.0-only
         <h2 id="mcp-heading">MCP</h2>
 
         <section aria-labelledby="mcp-connect-heading">
-          <h3 id="mcp-connect-heading">Connect your AI assistant</h3>
-          <p>MCP lets a supported AI app read filtered context and perform permitted actions on tabs you choose. It starts disabled and uses a local helper supplied with the Page as Context plugin.</p>
+          <h3 id="mcp-connect-heading">Two ways to connect</h3>
+          <p>Choose a connection path for your AI app. Both use the extension's privacy controls and explicit per-tab Read or Write access.</p>
+          <div class="connection-paths">
+            <article class="connection-path" aria-labelledby="mcp-plugin-path-heading">
+              <h4 id="mcp-plugin-path-heading">App plugin + native helper</h4>
+              <p>For ChatGPT, Claude, Antigravity and GitHub Copilot app. Install the matching Page as Context plugin; it includes the local helper and runtime and starts the bridge when needed. No separate HFS server needs to stay open.</p>
+              <p><a href="https://github.com/V-Shkrobatskyi/Page-as-Context/blob/main/docs/mcp-integration.md" target="_blank" rel="noopener noreferrer">Plugin setup guides ↗</a></p>
+            </article>
+            <article class="connection-path" aria-labelledby="mcp-http-path-heading">
+              <h4 id="mcp-http-path-heading">Universal MCP server — Local HTTP (HFS)</h4>
+              <p>For local AI apps that support Streamable HTTP MCP and Authorization headers. Run the separate HFS server on the same computer, add an HTTP client in the extension, then enter its URL and Authorization in your AI app. No app-specific Page as Context plugin is required; keep HFS running during use. Cloud-hosted clients cannot connect directly.</p>
+              <p><a href="https://github.com/V-Shkrobatskyi/Page-as-Context/blob/main/docs/hfs-integration.md" target="_blank" rel="noopener noreferrer">Universal MCP server setup guide ↗</a></p>
+            </article>
+          </div>
+          <h4 id="mcp-plugin-start-heading">Quick start with an app plugin</h4>
           <ol>
-            <li>Open <a href="mcp.html">MCP settings</a>, enable MCP, choose <strong>Automatic</strong>, apply settings and approve browser permissions. Install the plugin in your AI app and ask it to connect your browser. Browser instance and Extension ID are under <strong>Helper connection → Setup and browser instance</strong>.</li>
-            <li>Compare the pairing code in chat with the request in the browser tab that opens, then choose <strong>Approve pairing</strong>. Approve only a request you initiated. The app stays trusted until you revoke it; chats where its plugin is available can reuse that trust.</li>
-            <li>On a page, use the popup arrows to select <strong>AI Read</strong> or <strong>AI Write</strong>. The toolbar shows a yellow R or red W badge. <strong>AI Off</strong> ends access to that tab for all clients.</li>
+            <li>Install your app's plugin. Open <a href="mcp.html">MCP settings</a>, enable MCP and native helper connections, choose <strong>Automatic</strong>, apply settings and approve browser permissions.</li>
+            <li>Click <strong>Helper connection → Copy setup info</strong> and give it to the assistant when asking to connect this browser. Review its setup plan before confirming changes.</li>
+            <li>Compare the chat's pairing code with <strong>Pairing and clients</strong> in the extension and approve it yourself. Only approve a request you initiated.</li>
+            <li>On each intended tab choose <strong>AI Read</strong> or <strong>AI Write</strong>. Pairing alone grants no tab access; choose again after pairing a new app. The assistant finds connection IDs itself.</li>
           </ol>
-          <p>Write requires <strong>Mode: Read and write</strong> and asks before each action by default. <strong>Allow for this connection</strong> skips prompts only for that client and tab until navigation or disconnection. In Automatic, change this under <strong>Shared tabs → Skip prompts</strong>. Organization policy may require every prompt. Native controls are supported; custom editors may reject actions. Your AI app may forward shared context to its model provider.</p>
+          <p>Write requires <strong>Mode: Read and write</strong> and asks before each action by default. Connection-scoped approval can skip prompts until navigation, expiry or disconnection, unless policy requires every prompt. Your AI app may send returned context to its model provider.</p>
         </section>
 
         <section aria-labelledby="mcp-modes-heading">
-          <h3 id="mcp-modes-heading">Automatic and Manual connections</h3>
-          <p>For HTTP-capable local AI apps, <strong>Local HTTP (HFS)</strong> can run alongside the helper. See the <a href="https://github.com/V-Shkrobatskyi/Page-as-Context/blob/main/docs/hfs-integration.md" target="_blank" rel="noopener noreferrer">HFS setup guide</a>.</p>
-          <p><strong>Automatic</strong> connects the helper after setup. Choose Read or Write for each tab in the popup. After pairing a new app, choose Read or Write again on each source tab, even if it was already shared. The app can then discover those tabs without copying connection IDs. New pairing requests open an active MCP settings tab.</p>
-          <p>To switch browser instances, ask the updated plugin to prepare a new setup. Successful pairing switches the connection without restarting the chat; grant tab access again.</p>
-          <p><strong>Manual</strong> keeps explicit connection steps. Apply your access settings, choose <strong>Start helper connection</strong>, approve pairing, then open <strong>Connect MCP</strong> on the source page and choose <strong>Connect selected tab</strong> for a client. Existing installations stay Manual until you switch.</p>
-          <p>In Automatic, <strong>Auto-disconnect tabs</strong> defaults to <strong>1 hour of inactivity</strong> for Read and Write. Choose minutes, hours, days or unlimited. Successful reads and completed actions restart only that tab's timer; status checks and failed actions do not. Unlimited disables the inactivity timeout, subject to organization limits.</p>
-          <p>In Automatic, Read or Write stays with the tab across reloads and site changes; new tabs start Off. Navigation does not reset the timer. Closing a tab, browser restart or extension reload clears access. Helper reconnection downgrades Write to Read. Use <strong>Revoke</strong> to remove an app's trust or <strong>Stop all MCP access</strong> to end all current access. Developer setup and limits are in the <a href="https://github.com/V-Shkrobatskyi/Page-as-Context/blob/main/docs/mcp-integration.md" target="_blank" rel="noopener noreferrer">full MCP guide</a>.</p>
+          <h3 id="mcp-modes-heading">Connections and access</h3>
+          <p><strong>Automatic</strong> starts the bridge after setup; use Retry connection if needed. In <strong>Manual</strong>, use Start helper connection, pair, then <strong>Connect MCP → Connect selected tab</strong>. These modes do not select between plugins and the HTTP server; the two connection paths can be enabled together.</p>
+          <p>Automatic sharing follows the tab across reloads and site changes; new tabs start Off. Its default timeout is one hour of inactivity. Successful reads and applied actions renew that tab's timer. Closing a tab, browser restart or extension reload clears access. Reconnecting an AI app can restore validated Read, but never Write or session approvals.</p>
+          <p><strong>AI Off</strong> ends sharing for that tab. <strong>Revoke</strong> removes one client's access. Native plugin clients pair again; HTTP clients need a newly authorized key. Grant tabs explicitly afterwards. <strong>Stop all MCP access</strong> ends current sharing and connections. See the <a href="https://github.com/V-Shkrobatskyi/Page-as-Context/blob/main/docs/mcp-integration.md" target="_blank" rel="noopener noreferrer">MCP user guide</a> for access controls and troubleshooting.</p>
         </section>
       </section>
 
