@@ -178,3 +178,38 @@ See the [protocol](../integrations/hfs/PROTOCOL.md) and
 [architecture decision](adr/0002-hfs-http-transport.md) for security/recovery details.
 Developers: `npm run check:hfs`; synthetic live check:
 `npm run check:hfs:live -- --binary /path/to/hfs`.
+
+
+### Compact post-fill responses (2.2.3)
+
+Since 2.2.4, `fill_element` accepts optional `responseMode: "full" | "scoped"`; omission means
+`scoped`. Set `responseMode: "full"` to request the complete post-fill page.
+`scoped` still captures the whole permitted page internally and applies
+normal privacy/data controls and action-safe compression. It returns only the
+filled native text field, a structural summary of its immediate DOM parent and
+changed visible status/alert regions when the remaining sanitized semantics are
+unchanged. The parent is summarized by tag; its siblings/subtree are omitted.
+Unknown outside changes, replaced/filtered targets, incomplete captures, missing
+identity/parent information, navigation or bounds cause a full fallback.
+
+`snapshot.scope.kind` and `fallbackReason` describe the actual result. `omitted`,
+`parentSummaryOnly`, `relatedRegionRemoved` and `recovery` describe its limits.
+This is independent of `partial` and capture warnings. The scoped textual tool
+envelope has a conservative 16 KiB budget; comparison baselines are bounded to
+10,000 nodes and 512 KiB (conservative UTF-8 bound). Full fallback remains subject
+to the normal response policy limit. For scoped fill, a separate full internal capture obtains an operation-local
+privacy-filtered baseline immediately before mutation; the ordinary snapshot
+retains node identities/refs only. The baseline is released when the operation
+finishes and is never written to diagnostics or disk. This first version therefore
+uses two internal full captures around a scoped fill and optimizes model response
+size, not capture latency.
+
+Every action invalidates old refs. Scoped snapshots issue refs only for the
+returned controls; use `read_page_context` to reach fields outside that scope.
+A receipt of `applied` confirms action dispatch, not application persistence.
+The fixed 150 ms observation window does not confirm later asynchronous updates.
+After `snapshotUnavailable`, read again; never replay a write to refresh context.
+The same catalog and execution path serve native plugins and Local HTTP (HFS).
+Existing installed native plugin packages require the newly built helper catalog
+and a client tool refresh before they can advertise the optional argument.
+`click_element`, `select_option` and `set_checked` continue returning full context.

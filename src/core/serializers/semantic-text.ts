@@ -87,6 +87,7 @@ function renderAttributes(node: SemanticNode): string[] {
   const attributes: string[] = [];
   if (node.actionRef !== undefined) attributes.push(`ref=${quote(node.actionRef)}`);
 
+  if (node.placeholder !== undefined) attributes.push(`placeholder=${quote(node.placeholder)}`);
   if (node.value !== undefined) attributes.push(`value=${quote(node.value)}`);
   for (const state of STATE_ORDER) {
     const value = node.states?.[state];

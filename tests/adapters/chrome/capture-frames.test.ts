@@ -12,7 +12,7 @@ type Event = Parameters<NonNullable<ChromeDebuggerClient['onEvent']>>[0];
 function harness(options: {
   hidden?: boolean; technical?: boolean; unknown?: boolean; missingOwner?: boolean; changed?: 'root' | 'child';
   childError?: boolean; nested?: boolean; invalidChild?: boolean; enableError?: boolean; cleanupError?: boolean;
-  rootResponse?: unknown; password?: boolean; noFrames?: boolean;
+  rootResponse?: unknown; password?: boolean; nativeEmpty?: boolean; noFrames?: boolean;
   selectionContext?: 'missing' | 'duplicate' | 'stale' | 'destroyed'; selectionReplaced?: boolean;
 } = {}) {
   const calls: { method: string; session?: string; params?: Record<string, unknown> }[] = [];
@@ -69,6 +69,8 @@ function harness(options: {
       if (method === 'DOM.getFrameOwner') { callback(options.missingOwner ? {} : { backendNodeId: 10 }); return; }
       if (method === 'DOM.resolveNode') { callback({ object: { objectId: params?.backendNodeId === 20 ? 'password' : 'owner' } }); return; }
       if (method === 'Runtime.callFunctionOn') {
+        if (params?.objectId === 'owner' && options.nativeEmpty && String(params?.functionDeclaration).includes('HTMLInputElement.prototype')) { callback({ result: { value: 'empty' } }); return; }
+        if (params?.objectId === 'owner' && options.nativeEmpty && String(params?.functionDeclaration).includes('this.type === "password"')) { callback({ result: { value: false } }); return; }
         if (params?.objectId === 'selected') { callback({ result: { value: !options.selectionReplaced } }); return; }
         callback({ result: { value: params?.objectId === 'password' ? true : options.hidden ? 'hidden' : options.technical ? 'technical' : options.unknown ? undefined : 'visible' } }); return;
       }
@@ -356,4 +358,21 @@ it('excludes duplicated editable AX values from descendants and ancestor accessi
   const result = await createFrameCapturer(h.client)(42, undefined, undefined, { data: { includeTitle: true, includeFormValues: false, pageUrl: 'full', linkUrls: 'full' } });
   expect(result.ok).toBe(true); expect(JSON.stringify(result)).not.toContain('SECRET-CURRENT');
   expect(JSON.stringify(result)).toContain('Comment'); expect(JSON.stringify(result)).toContain('Submit');
+});
+
+it('reports a native known-empty Chrome field without exposing excluded values', async () => {
+  const response = { nodes: [
+    { nodeId: 'root', frameId: 'root', role: { value: 'RootWebArea' }, childIds: ['field'] },
+    { nodeId: 'field', backendDOMNodeId: 21, role: { value: 'textbox' }, name: { value: 'Text input' } },
+  ] };
+  for (const allowed of [true, false]) {
+    const h = harness({ noFrames: true, nativeEmpty: true, rootResponse: response });
+    const result = await createFrameCapturer(h.client)(42, undefined, undefined,
+      { data: { includeTitle: true, includeFormValues: allowed, pageUrl: 'full', linkUrls: 'full' } });
+    expect(result.ok).toBe(true); if (!result.ok) throw new Error('capture failed');
+    const text = prepareExport(result.tree, 'without', 'semantic-text', false).serialized.content;
+    expect(text.includes('value=""')).toBe(allowed);
+    const expressions = h.calls.filter(call => call.method === 'Runtime.callFunctionOn').map(call => String(call.params?.functionDeclaration));
+    expect(expressions.some(expression => expression.includes('HTMLInputElement.prototype'))).toBe(allowed);
+  }
 });

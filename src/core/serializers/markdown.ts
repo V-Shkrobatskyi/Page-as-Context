@@ -57,6 +57,7 @@ export function renderMarkdownHeader(tree: SemanticTree, lines: string[], attrib
 function renderNode(node: SemanticNode, depth: number, lines?: string[], measure?: (line: string) => void): number {
   const attributes: string[] = [];
   if (node.actionRef !== undefined) attributes.push(`ref=${code(node.actionRef)}`);
+  if (node.placeholder !== undefined) attributes.push(`placeholder=${code(node.placeholder)}`);
   if (node.value !== undefined) attributes.push(`value=${code(node.value)}`);
   for (const state of STATE_ORDER) {
     const value = node.states?.[state];

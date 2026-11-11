@@ -21,6 +21,7 @@ export function hasSemanticAttributes(node: SemanticNode): boolean {
   if (node.actionRef) return true;
   return (
     node.name !== undefined ||
+    node.placeholder !== undefined ||
     node.value !== undefined ||
     node.level !== undefined ||
     node.href !== undefined ||

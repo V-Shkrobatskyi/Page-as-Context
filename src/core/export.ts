@@ -16,7 +16,7 @@ import { sanitizeActionReferences } from './action-projection';
 export type SupportedExportFormat = Extract<ExportFormat, 'semantic-text' | 'markdown'>;
 
 export interface PreparedExport {
-  actionTargets?: { ref: string; role: string; name?: string }[];
+  actionTargets?: { ref: string; role: string; name?: string; captureIdentity?: string }[];
   serialized: SerializedContext;
   characterCount: number;
   approximateTokenCount: number;
@@ -33,15 +33,17 @@ export function prepareExport(
   redactionSettings?: RedactionSettings,
   dataControls?: DataControls,
   presentation: ExportPresentation = {},
+  observeTree?: (tree: SemanticTree) => void,
 ): PreparedExport {
   tree = sanitizeActionReferences(tree, applyDataControls(tree, dataControls));
   // Without is already normalized; serializers and redaction do not mutate it.
   const selectedTree = compressionLevel === 'without' ? tree : compressSemanticTree(tree, compressionLevel);
   const redaction = redactForExport(selectedTree, redactSensitiveData, redactionSettings);
+  observeTree?.(redaction.tree);
   const actionTargets: NonNullable<PreparedExport['actionTargets']> = [];
   if (presentation.profile === 'agent-context') {
     const stack = [redaction.tree.root];
-    while (stack.length) { const node = stack.pop()!; if (node.actionRef) actionTargets.push({ ref: node.actionRef, role: node.role, ...(node.name ? { name: node.name } : {}) }); stack.push(...node.children); }
+    while (stack.length) { const node = stack.pop()!; if (node.actionRef) actionTargets.push({ ref: node.actionRef, role: node.role, ...(node.name ? { name: node.name } : {}), ...(node.captureIdentity ? { captureIdentity: node.captureIdentity } : {}) }); stack.push(...node.children); }
   }
   const attribution = renderExportAttribution(compressionLevel, redactSensitiveData, redactionSettings);
   const selected = compressionLevel === 'maximum'
@@ -65,8 +67,9 @@ export function prepareExport(
 }
 
 function redactForExport(tree: SemanticTree, redactSensitiveData: boolean, settings?: RedactionSettings) {
-  const result = redactSensitiveData ? redactSemanticTree(tree, settings) : { tree, redactionCount: 0 };
-  return { ...result, tree: sanitizeActionReferences(tree, result.tree) };
+  const maskedValueRefs = new Set<string>();
+  const result = redactSensitiveData ? redactSemanticTree(tree, settings, ref => maskedValueRefs.add(ref)) : { tree, redactionCount: 0 };
+  return { ...result, tree: sanitizeActionReferences(tree, result.tree, maskedValueRefs) };
 }
 
 function serialize(tree: SemanticTree, format: SupportedExportFormat, attribution: string, presentation: ExportPresentation): SerializedContext {

@@ -181,6 +181,12 @@ export function captureDomPage(doc: Document, limits: DomCaptureLimits = DOM_CAP
         let name = names.get(element);
         if (name === undefined) { name = accessibleName(element); names.set(element, name); }
         if (name) output.name = text(clean(name));
+        // Expose a hint without inventing an accessible name. Password hints
+        // never enter the context, and all other hints pass export privacy.
+        if (!name && element.matches('input,textarea') && !isPassword(element)) {
+          const hint = clean(element.getAttribute('placeholder') ?? '');
+          if (hint) output.placeholder = text(hint);
+        }
         if (omitValues && editable(element)) output.editable = true;
         const states = elementStates(element, role, !omitValues);
         if (states) output.states = states;

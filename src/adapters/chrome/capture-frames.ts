@@ -299,16 +299,19 @@ export function createFrameCapturer(client: ChromeDebuggerClient) {
         }
         frame.snapshot.nodes = frame.snapshot.nodes.filter(node => !suppressedValues.has(node.nodeId));
       }
-      // Only inspect input type, never DOM values. Suppress descendants of password controls.
+      // Inspect password type and, only when values are allowed, native emptiness.
+      // Return a boolean/sentinel, never a nonempty DOM value or password value.
       const suppressed = new Set<string>();
       for (const node of frame.snapshot.nodes) {
         if (node.value === undefined && node.role?.value !== 'textbox' && node.role?.value !== 'searchbox') continue;
         let password: unknown;
         if (typeof node.backendDOMNodeId === 'number') {
-          password = await inspect(frame.session, node.backendDOMNodeId,
-            'function() { return this.localName === "input" && this.type === "password"; }');
+          password = await inspect(frame.session, node.backendDOMNodeId, controls?.data?.includeFormValues === false
+            ? 'function() { return this.localName === "input" && this.type === "password"; }'
+            : 'function() { if (this.localName === "input" && this.type === "password") return true; const w = this.ownerDocument.defaultView; const p = this.localName === "textarea" ? w.HTMLTextAreaElement.prototype : this.localName === "input" && ["text", "search", "email", "tel", "url"].includes(this.type) ? w.HTMLInputElement.prototype : undefined; return p && Object.getOwnPropertyDescriptor(p, "value").get.call(this) === "" ? "empty" : false; }');
         }
-        if (password !== false) {
+        if (password === 'empty' && node.value === undefined && controls?.data?.includeFormValues !== false) node.value = { type: 'string', value: '' };
+        if (password !== false && password !== 'empty') {
           delete node.value;
           const queue = [...node.childIds ?? []];
           const byId = new Map(frame.snapshot.nodes.map((item) => [item.nodeId, item]));

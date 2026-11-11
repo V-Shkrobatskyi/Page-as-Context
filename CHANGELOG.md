@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.2.4 — unreleased
+
+- Preserve known empty Chrome AX values, expose filtered placeholder hints for unnamed Firefox native fields, and retain refs only for eligible partially masked text values with stable labels and node identities. Keep full hiding and mandatory exclusions fail-closed; distinguish filtered targets in fill fallback diagnostics.
+
+- Remove installation-time browser configuration from Claude Desktop MCPB. One server exposes separate chrome_* and firefox_* setup/page tools for independent pairing and concurrent use; keep the Claude Code entry points unchanged. Rebuild package 1.2.4 at the user's request in a separate artifact directory.
+
+- At the user's request, set all desktop plugin package versions to 1.2.4 alongside extension 2.2.4, retaining the latest branding, setup guide and ChatGPT archive packaging fixes. Earlier 1.2.4/1.2.5/1.2.6 build artifacts remain separate; installed releases are not replaced automatically.
+
+- Align Claude Desktop/Code, Antigravity and GitHub Copilot app packages at 1.2.6. Add the project homepage and supported client icon metadata, preserving descriptions and setup skills. Copilot App retains its portable manifest without an unsupported icon field.
+
+- Add the browser extension icon and GitHub website to ChatGPT package 1.2.6. Shorten its browser setup skill and add concise skill list metadata while preserving pairing and consent boundaries.
+
+- Fix ChatGPT desktop packaging in client package 1.2.5: emit a single-plugin UI upload archive separately from the marketplace, omit macOS metadata and development-only dependency files, strip and ad-hoc sign the pinned Node runtime, and enforce published archive limits at build time. Desktop UI acceptance remains separate.
+
+- Make compact scoped responses the default for `fill_element` when `responseMode` is omitted. Keep explicit `responseMode: "full"` and safe full fallbacks; leave other write-tools unchanged.
+- Normalize the default at the shared browser execution boundary for native and HFS clients, and advertise it in the common tool catalog. Verify omitted/scoped/full behavior and retry protection.
+- Update the common helper to 0.2.2 and affected desktop packages to 1.2.4 so existing 1.2.3 installations can receive the changed catalog without reusing a release version.
+
+## 2.2.3 — unreleased
+
+- Add optional `responseMode: scoped` to `fill_element`, preserving full responses by default and after other actions. Return the filled control, a bounded DOM-parent summary and changed status/alert regions; fall back to a full response with a reason when identity, privacy, capture completeness or other page changes prevent a safe scope.
+- Preserve snapshot invalidation, grant/policy checks and receipt-only retry protection across native and HFS transports. Observe 150 ms before the post-fill capture without claiming application persistence or observing later asynchronous changes.
+- Focus native text controls and emit a replacement InputEvent for text fills. Keep existing unsupported control types unchanged.
+- Update the extension to 2.2.3, common helper to 0.2.1 and affected desktop package sources to 1.2.3. Installed packages are not changed automatically.
+
 ## 2.2.2 — unreleased
 
 - Distinguish app plugins with a native helper from the universal Local HTTP (HFS) MCP server in the bundled guide, with separate setup links and connection requirements.

@@ -3,7 +3,7 @@
   "description": "Local browser extension for copying semantic page context in Chrome and Firefox.",
   "private": true,
   "license": "GPL-3.0-only",
-  "version": "2.2.2",
+  "version": "2.2.4",
   "type": "module",
   "scripts": {
     "dev": "wxt",

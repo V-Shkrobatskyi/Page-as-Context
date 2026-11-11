@@ -6,12 +6,14 @@ export const validMcpId = (value: unknown): value is string => typeof value === 
 export function actionArguments(tool: string, raw: Record<string, unknown>): ActionCommand & { operationId: string; connectionId: string } {
   const action = WRITE_TOOLS[tool as keyof typeof WRITE_TOOLS];
   const fields = ['connectionId', 'snapshotId', 'elementRef', 'operationId', ...(action === 'fill' ? ['text'] : action === 'select-option' ? ['optionRef'] : action === 'set-checked' ? ['checked'] : [])];
-  if (!action || Object.keys(raw).length !== fields.length || Object.keys(raw).some(key => !fields.includes(key)) ||
+  const optional = action === 'fill' ? ['responseMode'] : [];
+  if (!action || fields.some(key => !Object.hasOwn(raw, key)) || Object.keys(raw).some(key => !fields.includes(key) && !optional.includes(key)) ||
+    Object.hasOwn(raw, 'responseMode') && !['full', 'scoped'].includes(raw.responseMode as string) ||
     !['connectionId', 'snapshotId', 'elementRef', 'operationId'].every(key => validMcpId(raw[key])) ||
     action === 'fill' && (typeof raw.text !== 'string' || raw.text.length > 10000) || action === 'select-option' && !validMcpId(raw.optionRef) ||
     action === 'set-checked' && typeof raw.checked !== 'boolean') throw new Error('invalid-request');
   return { action, connectionId: raw.connectionId as string, snapshotId: raw.snapshotId as string, elementRef: raw.elementRef as string, operationId: raw.operationId as string,
-    ...(action === 'fill' ? { text: raw.text as string } : action === 'select-option' ? { optionRef: raw.optionRef as string } : action === 'set-checked' ? { checked: raw.checked as boolean } : {}) };
+    ...(action === 'fill' ? { text: raw.text as string, responseMode: (raw.responseMode ?? 'scoped') as 'full' | 'scoped' } : action === 'select-option' ? { optionRef: raw.optionRef as string } : action === 'set-checked' ? { checked: raw.checked as boolean } : {}) };
 }
 
 type Receipt = ActionOutcome & { operationId: string; snapshotId?: string; snapshotUnavailable?: string };

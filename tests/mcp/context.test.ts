@@ -117,3 +117,39 @@ it.each([
 it('rejects a malformed legacy checkbox instead of granting access', () => {
   expect(() => validateMcpSettings({ ...defaultMcpSettings(), allowPageActions: 'true' })).toThrow();
 });
+
+
+it('collects an explicit operation baseline but returns only scoped targets and preserves partial semantics', async () => {
+  state.stored['mcp-settings-v1'] = { ...defaultMcpSettings(), mode: 'read-write' };
+  const field = (ref: string, value: string) => ({ role: 'textbox', name: 'Display name', value, actionRef: ref, captureIdentity: 'internal-only-identity', children: [] });
+  const firstRef = crypto.randomUUID(), nextRef = crypto.randomUUID(), otherRef = crypto.randomUUID();
+  const tree = (ref: string, value: string) => ({ schemaVersion: 1, sourceUrl: 'https://example.test/page', root: { role: 'page', children: [field(ref, value), { role: 'button', name: 'Outside field', actionRef: otherRef, children: [] }] } });
+  const access = { owner: 'synthetic-owner', expires: Date.now() + 60000, write: true, collectScopeTree: true, retain: vi.fn() };
+  state.capture.mockResolvedValueOnce({ ok: true, tree: tree(firstRef, 'old') });
+  const first = await readMcpContext(7, () => {}, true, new AbortController().signal, undefined, access);
+  expect(first).not.toHaveProperty('scope');
+  const before = access.retain.mock.calls[0]![0].scopeTree;
+  state.capture.mockResolvedValueOnce({ ok: true, tree: tree(nextRef, 'new') });
+  const scoped = await readMcpContext(7, () => {}, true, new AbortController().signal, undefined, access, { before, elementRef: firstRef, parentTag: 'form' });
+  expect(scoped).toMatchObject({ partial: false, scope: { kind: 'scoped', parentTag: 'form', parentSummaryOnly: true } });
+  expect(scoped.snapshotId).not.toBe(first.snapshotId);
+  expect(scoped.context).toContain(nextRef); expect(scoped.context).not.toContain(otherRef);
+  expect(JSON.stringify(scoped)).not.toMatch(/internal-only-identity|scopeTree|captureIdentity/);
+  expect([...access.retain.mock.calls[1]![0].targets.keys()]).toEqual([nextRef]);
+  state.capture.mockResolvedValueOnce({ ok: true, tree: tree(crypto.randomUUID(), 'new'), warnings: ['frame-unavailable'] });
+  const partial = await readMcpContext(7, () => {}, true, new AbortController().signal, undefined, access, { before, elementRef: firstRef, parentTag: 'form' });
+  expect(partial).toMatchObject({ partial: true, scope: { kind: 'full', fallbackReason: 'capture-partial' } });
+  expect(partial.scope).not.toHaveProperty('parentSummaryOnly');
+  state.capture.mockResolvedValueOnce({ ok: true, tree: tree(crypto.randomUUID(), '"'.repeat(5000)) });
+  const large = await readMcpContext(7, () => {}, true, new AbortController().signal, undefined, access, { before, elementRef: firstRef, parentTag: 'label' });
+  expect(large.scope).toMatchObject({ kind: 'full', fallbackReason: 'scoped-response-limit' });
+  expect(large.scope).not.toHaveProperty('parentSummaryOnly');
+});
+
+
+it('does not retain a page tree on an ordinary action snapshot', async () => {
+  state.stored['mcp-settings-v1'] = { ...defaultMcpSettings(), mode: 'read-write' };
+  const retain = vi.fn();
+  await readMcpContext(7, () => {}, true, new AbortController().signal, undefined, {owner:'synthetic-owner',expires:Date.now()+60000,write:true,retain});
+  expect(retain.mock.calls[0]![0].scopeTree).toBeUndefined();
+});

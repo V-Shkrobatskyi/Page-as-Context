@@ -28,7 +28,7 @@ The popup supports **Semantic Text** (default) and **Markdown**. `Compact` is th
 
 Export headers include `Browser:` between `URL:` and `Captured:` in both formats and every compression profile. It records the browser name, Desktop or Android platform when known, and the available version. Firefox uses runtime metadata; Chromium uses local browser hints with a User-Agent fallback. A reduced version is shown as its major version; unavailable versions are omitted, and missing metadata appears as `Unavailable`. This adds no permissions or network requests.
 
-Export attribution includes the installed extension version and a settings digit, for example `2.2.2/7/d (created by V. Shkrobatskyi)` (illustrative version). The codes are Without `0`, Detailed `2`, Compact `4`, Maximum `6`; add `1` when **Redact sensitive data** is enabled. When redaction is enabled, a final `/d` records the default filter configuration for the installed version; `/m` records modified built-in switches or case settings, or any custom rules (including disabled ones). Restoring the default configuration returns the suffix to `/d`. The suffix is omitted when redaction is off. The digit records the selected profile even when Maximum falls back to Compact, and the privacy option rather than a guarantee that every sensitive value was found.
+Export attribution includes the installed extension version and a settings digit, for example `2.2.4/7/d (created by V. Shkrobatskyi)` (illustrative version). The codes are Without `0`, Detailed `2`, Compact `4`, Maximum `6`; add `1` when **Redact sensitive data** is enabled. When redaction is enabled, a final `/d` records the default filter configuration for the installed version; `/m` records modified built-in switches or case settings, or any custom rules (including disabled ones). Restoring the default configuration returns the suffix to `/d`. The suffix is omitted when redaction is off. The digit records the selected profile even when Maximum falls back to Compact, and the privacy option rather than a guarantee that every sensitive value was found.
 
 The popup shows the exact JavaScript character count (including boundaries for Copy), a rough token estimate (`ceil(characters / 4)`), and context reduction relative to Without output with the same format and privacy setting. Boundaries are excluded from the reduction ratio. The estimate is not model-specific tokenization. Maximum uses a separate local cost heuristic for packing; it does not bundle a tokenizer or guarantee savings for every model.
 
@@ -183,3 +183,54 @@ installation. Native remains available; existing settings do not enable HTTP.
 Both routes use the same browser policy, privacy filters, tab grants and action
 approvals. HTTP diagnostics show connection state without secrets or page metadata.
 See [HFS setup, trust boundary and verification limits](hfs-integration.md).
+
+
+### Compact post-fill responses (2.2.3)
+
+Since 2.2.4, `fill_element` accepts optional `responseMode: "full" | "scoped"`; omission means
+`scoped`. Set `responseMode: "full"` to request the complete post-fill page.
+`scoped` still captures the whole permitted page internally and applies
+normal privacy/data controls and action-safe compression. It returns only the
+filled native text field, a structural summary of its immediate DOM parent and
+changed visible status/alert regions when the remaining sanitized semantics are
+unchanged. The parent is summarized by tag; its siblings/subtree are omitted.
+Unknown outside changes, replaced/filtered targets, incomplete captures, missing
+identity/parent information, navigation or bounds cause a full fallback.
+
+`snapshot.scope.kind` and `fallbackReason` describe the actual result. `omitted`,
+`parentSummaryOnly`, `relatedRegionRemoved` and `recovery` describe its limits.
+This is independent of `partial` and capture warnings. The scoped textual tool
+envelope has a conservative 16 KiB budget; comparison baselines are bounded to
+10,000 nodes and 512 KiB (conservative UTF-8 bound). Full fallback remains subject
+to the normal response policy limit. For scoped fill, a separate full internal capture obtains an operation-local
+privacy-filtered baseline immediately before mutation; the ordinary snapshot
+retains node identities/refs only. The baseline is released when the operation
+finishes and is never written to diagnostics or disk. This first version therefore
+uses two internal full captures around a scoped fill and optimizes model response
+size, not capture latency.
+
+Every action invalidates old refs. Scoped snapshots issue refs only for the
+returned controls; use `read_page_context` to reach fields outside that scope.
+A receipt of `applied` confirms action dispatch, not application persistence.
+The fixed 150 ms observation window does not confirm later asynchronous updates.
+After `snapshotUnavailable`, read again; never replay a write to refresh context.
+The same catalog and execution path serve native plugins and Local HTTP (HFS).
+Existing installed native plugin packages require the newly built helper catalog
+and a client tool refresh before they can advertise the optional argument.
+`click_element`, `select_option` and `set_checked` continue returning full context.
+
+### Empty values, input hints and masked text targets
+
+Known empty Chrome AX string values are preserved as `value=""`; an omitted
+value is not treated as empty. Firefox may expose `placeholder` separately for
+unnamed native inputs/textarea, without changing their accessible name. Hints
+pass the same privacy pipeline and target validation detects changed hints.
+Maximum falls back to the ordinary serializer when these hints are present.
+
+For ordinary textbox/searchbox targets with an unchanged visible name or hint
+and internal node identity, partial personal-value masking can retain the action
+ref. The value stays masked. Full hiding, excluded form values, redacted target
+labels/hints, secret controls and changed identity never gain this exception.
+A matched node whose ref was removed yields `target-filtered`; missing or
+ambiguous identities retain `target-replaced-or-filtered`. Applied is still not
+a claim that the application persisted the value.
