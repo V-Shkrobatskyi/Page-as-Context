@@ -38,3 +38,6 @@ AGENTS.md
 
 # Generated desktop MCP packages and downloaded build runtimes
 artifacts/mcp/
+
+# Local browser build archives
+artifacts/extension/

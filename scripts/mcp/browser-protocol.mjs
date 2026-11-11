@@ -37,7 +37,10 @@ export async function launch(browser, profile, binary) {
     ? ['--headless=new', `--user-data-dir=${profile}`, '--remote-debugging-port=0', '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--enable-unsafe-extension-debugging', 'about:blank']
     : ['--headless', '--no-remote', '--remote-allow-system-access', '--profile', profile, '--remote-debugging-port', '0', 'about:blank'];
   let diagnostics = '';
-  const child = spawn(binary ?? defaults[browser], args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  // Firefox now requires this explicit opt-in for extension-origin test pages.
+  // Only the isolated process launched with the supplied temporary profile gets it.
+  const child = spawn(binary ?? defaults[browser], args, { stdio: ['ignore', 'pipe', 'pipe'],
+    ...(browser === 'firefox' ? { env: { ...process.env, MOZ_REMOTE_ALLOW_SYSTEM_ACCESS: '1' } } : {}) });
   child.stderr.on('data', bytes => { diagnostics = (diagnostics + bytes.toString()).slice(-8000); });
   let exited = false;
   const exit = new Promise(resolve => child.once('exit', () => { exited = true; resolve(); }));
