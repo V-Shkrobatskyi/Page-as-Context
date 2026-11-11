@@ -1,3 +1,4 @@
+import { compactChatgptPackage } from './chatgpt-upload.mjs';
 import { packageUserGuide } from './package-user-guide.mjs';
 // Copyright (c) 2026 Vitalii Shkrobatskyi; SPDX-License-Identifier: GPL-3.0-only
 import { readFile, writeFile, mkdir, cp, copyFile, chmod, lstat, readdir } from 'node:fs/promises';
@@ -39,8 +40,9 @@ await mkdir(join(plugin, 'helper'));
 for (const name of ['package.json', 'package-lock.json', 'LICENSE', 'MCP_SDK_LICENSE', 'THIRD_PARTY_NOTICES.txt']) await copyFile(join(repo, 'helper', name), join(plugin, 'helper', name));
 await cp(join(repo, 'helper/src'), join(plugin, 'helper/src'), { recursive: true });
 execFileSync('npm', ['ci', '--prefix', join(plugin, 'helper'), '--omit=dev', '--ignore-scripts', '--bin-links=false', '--offline', '--no-audit', '--no-fund'], { stdio: 'pipe' });
+const runtimeDetails = values.client === 'chatgpt' ? await compactChatgptPackage(plugin) : {};
 const lock = JSON.parse(await readFile(join(plugin, 'helper/package-lock.json'), 'utf8'));
-await writeFile(join(plugin, 'DEPENDENCIES.json'), JSON.stringify({ node: { version: '24.10.0', platform: 'darwin', arch: 'arm64', archiveSha256: expected }, packages: Object.entries(lock.packages).filter(([path]) => path).map(([path, entry]) => ({ path, version: entry.version, license: entry.license, integrity: entry.integrity })) }, null, 2) + '\n');
+await writeFile(join(plugin, 'DEPENDENCIES.json'), JSON.stringify({ node: { version: '24.10.0', platform: 'darwin', arch: 'arm64', archiveSha256: expected, ...runtimeDetails }, packages: Object.entries(lock.packages).filter(([path]) => path).map(([path, entry]) => ({ path, version: entry.version, license: entry.license, integrity: entry.integrity })) }, null, 2) + '\n');
 if (values.client === 'claude-code') {
   await mkdir(join(marketplace, '.claude-plugin'), { recursive: true });
   await writeFile(join(marketplace, '.claude-plugin/marketplace.json'), JSON.stringify({ name: 'page-as-context-local', owner: { name: 'Vitalii Shkrobatskyi' }, plugins: [{ name: 'page-as-context', source: './plugins/page-as-context' }] }, null, 2) + '\n');
@@ -62,6 +64,20 @@ await writeFile(join(marketplace, 'PACKAGE.json'), JSON.stringify({ format: 1, v
 await writeFile(join(output, 'README.md'), userGuide);
 const label = { chatgpt: 'ChatGPT', 'claude-code': 'Claude-Code', antigravity: 'Antigravity' }[values.client];
 const zip = `Page-as-Context-${label}-${values.version}-macOS-arm64-plugin.zip`;
-execFileSync('/usr/bin/ditto', ['-c', '-k', '--keepParent', marketplace, join(output, zip)]);
-await writeFile(join(output, 'SHA256SUMS.txt'), `${digest(await readFile(join(output, zip)))}  ${zip}\n`);
+const archives = [zip];
+if (values.client === 'chatgpt') {
+  // The desktop upload expects one plugin, not a marketplace wrapper. Keep a
+  // separate marketplace distribution for folder-based installation.
+  const pack = (source, name) => JSON.parse(execFileSync('python3', [join(repo, 'scripts/mcp/plugin-archive.py'), source, '--output', join(output, name)], { encoding: 'utf8' }));
+  const upload = pack(plugin, zip);
+  const marketplaceZip = `Page-as-Context-${label}-${values.version}-macOS-arm64-marketplace.zip`;
+  const catalog = pack(marketplace, marketplaceZip);
+  archives.push(marketplaceZip);
+  await writeFile(join(output, 'ARCHIVE-CHECK.json'), JSON.stringify({ version: values.version, upload, marketplace: catalog,
+    limitsSource: 'https://developers.openai.com/plugins/deploy/submission-errors',
+    limitation: 'Published portal limits checked; desktop UI import requires separate acceptance.' }, null, 2) + '\n');
+} else {
+  execFileSync('/usr/bin/ditto', ['-c', '-k', '--keepParent', marketplace, join(output, zip)]);
+}
+await writeFile(join(output, 'SHA256SUMS.txt'), (await Promise.all(archives.map(async name => `${digest(await readFile(join(output, name)))}  ${name}\n`))).join(''));
 console.log(JSON.stringify({ marketplace, archive: join(output, zip), version: values.version, platform: 'macOS arm64', setupApp: false, packageFiles: Object.keys(files).length }));

@@ -36,7 +36,7 @@ export function applyDataControls(tree: SemanticTree, c: DataControls = DEFAULT_
     const field = FORM_ROLES.has(node.role) || node.editable === true;
     const result: SemanticNode = { ...node, children: !c.includeFormValues && field ? [] : node.children.map(visit) };
     if (!c.includeFormValues) {
-      if (field) { if (node.name !== undefined && node.name === node.value) delete result.name; delete result.value; }
+      if (field) { if (node.name !== undefined && node.name === node.value) delete result.name; if (node.placeholder === node.value) delete result.placeholder; delete result.value; }
       if (node.states) { result.states = { ...node.states }; delete result.states.checked; delete result.states.selected; }
     }
     if (node.role === 'page') {

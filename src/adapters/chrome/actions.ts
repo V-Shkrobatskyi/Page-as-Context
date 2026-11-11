@@ -15,13 +15,14 @@ export function rememberChromeTarget(lease: ActionLease, raw: ChromeAxNode, node
   if (!raw.backendDOMNodeId || !validAxName(raw.name) || !ACTION_ROLES.has(node.role) || node.states?.disabled || new RegExp(ACTION_SENSITIVE_PATTERN, 'iu').test(node.name ?? '') || lease.expires <= Date.now()) return;
   const registry = registries.get(lease.snapshotId); if (!registry || registry.size >= 10000) return;
   const ref = crypto.randomUUID(); node.actionRef = ref;
+  node.captureIdentity = JSON.stringify([frame.id, frame.loaderId, frame.targetId ?? '', raw.backendDOMNodeId]);
   registry.set(ref, { backend: raw.backendDOMNodeId, frameId: frame.id, loaderId: frame.loaderId, ...(frame.targetId ? { targetId: frame.targetId } : {}), name: node.name });
 }
 
 export function createChromeActionSnapshot(tabId: number, lease: ActionLease): ActionSnapshot {
   const registry = new Map<string, Target>(); registries.set(lease.snapshotId, registry);
   let disposed = false;
-  const dispose = () => { disposed = true; clearTimeout(timer); registry.clear(); targets.clear(); registries.delete(lease.snapshotId); };
+  const dispose = () => { disposed = true; clearTimeout(timer); registry.clear(); targets.clear(); snapshot.scopeTree = undefined; registries.delete(lease.snapshotId); };
   const timer = setTimeout(dispose, Math.max(1, Math.min(lease.expires - Date.now(), 480 * 60000)));
   const targets: ActionSnapshot['targets'] = new Map();
   const run = async (command: ActionCommand, signal: AbortSignal, authorize: () => Promise<void>): Promise<ActionOutcome> => {
@@ -29,6 +30,7 @@ export function createChromeActionSnapshot(tabId: number, lease: ActionLease): A
     if (disposed || lease.expires <= Date.now() || command.snapshotId !== lease.snapshotId || !target || !targets.has(command.elementRef) ||
       command.optionRef && (!option || !targets.has(command.optionRef))) return { status: 'rejected', error: 'stale-snapshot' };
     const client = chromeDebuggerClient(); let attached = false, attachPending = false, sessionId: string | undefined, dispatched = false, finishedLease = false;
+    let parentTag: string | undefined;
     const deadline = Date.now() + 6000;
     const bounded = <T>(start: (done: (value: T, error?: string) => void) => void, cleanup = false): Promise<T> => new Promise((resolve, reject) => {
       let finished = false;
@@ -89,8 +91,9 @@ export function createChromeActionSnapshot(tabId: number, lease: ActionLease): A
         const result = await invoke(command.action, true);
         if (result.error) { dispatched = false; throw new Error(result.error); }
         if (!result.applied) throw new Error('unsupported-action');
+        if (command.action === 'fill' && typeof result.parentTag === 'string') parentTag = result.parentTag;
       }
-      return { status: 'applied' };
+      return { status: 'applied', ...(parentTag ? { parentTag } : {}) };
     } catch (error) {
       return { status: dispatched ? 'outcome-unknown' : 'rejected', error: error instanceof Error && ['stale-snapshot', 'unsupported-action'].includes(error.message) ? error.message : dispatched ? 'outcome-unknown' : 'unsupported-action' };
     } finally {
@@ -104,5 +107,6 @@ export function createChromeActionSnapshot(tabId: number, lease: ActionLease): A
       if (!attachPending) attached = false;
     }
   };
-  return { ...lease, tabId, targets, run, dispose };
+  const snapshot: ActionSnapshot = { ...lease, tabId, targets, run, dispose };
+  return snapshot;
 }

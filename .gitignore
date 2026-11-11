@@ -38,3 +38,9 @@ AGENTS.md
 
 # Generated desktop MCP packages and downloaded build runtimes
 artifacts/mcp/
+
+# Local browser build archives
+artifacts/extension/
+
+# Python packaging tool cache
+__pycache__/

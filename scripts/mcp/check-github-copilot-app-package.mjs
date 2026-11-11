@@ -23,7 +23,9 @@ try {
   const manifest = await readJson('plugin.json');
   assert.equal(manifest.$schema, 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json');
   assert.equal(manifest.version, release.version);
-  assert.deepEqual(Object.keys(manifest).sort(), ['$schema', 'author', 'description', 'license', 'name', 'version']);
+  const supportedFields = new Set(['$schema', 'author', 'description', 'license', 'name', 'version', 'homepage', 'repository']);
+  for (const field of Object.keys(manifest)) assert.ok(supportedFields.has(field), `Unexpected manifest field: ${field}`);
+  for (const field of ['homepage', 'repository']) if (manifest[field]) assert.equal(new URL(manifest[field]).protocol, 'https:');
   const catalog = JSON.parse(await readFile(join(installed, '.github/plugin/marketplace.json'), 'utf8'));
   assert.equal(catalog.name, `page-as-context-copilot-app${probe ? '-probe' : ''}`);
   assert.deepEqual(catalog.plugins, [{ name: manifest.name, source: './plugins/page-as-context', version: manifest.version, description: manifest.description }]);

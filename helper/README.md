@@ -110,3 +110,5 @@ Pairing alone grants a new Native client no tab access. After approval choose
 **AI: Read** or **AI: Write** again on each source tab, even if it was already
 shared. Manual mode uses **Connect selected tab**. Tab grants, Write, connection
 IDs and session approvals are never copied from the previous instance.
+
+`fill_element` accepts optional `responseMode: "full" | "scoped"` (default `"scoped"`; set `"full"` for the complete page). Scoped replies expose only current refs in a bounded field context, or explicitly fall back to full. Read again for omitted controls; never replay applied/unknown operations to refresh state. The common catalog is shared with HFS. See [capture and export](../docs/capture-and-export.md#compact-post-fill-responses-223).

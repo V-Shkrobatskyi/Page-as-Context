@@ -31,7 +31,7 @@ const CREDENTIAL_MARKER = /Bearer|Basic|eyJ|gh[pousr]_|github_pat_|AKIA|ASIA|sk-
  * This is intentionally a local heuristic, not a general DLP or PII detector. It
  * must run before every serializer and never exposes the original matched values.
  */
-export function redactSemanticTree(tree: SemanticTree, settings: RedactionSettings = defaultRedactionSettings()): RedactionResult {
+export function redactSemanticTree(tree: SemanticTree, settings: RedactionSettings = defaultRedactionSettings(), onMaskedValueRef?: (ref: string) => void): RedactionResult {
   const validated = validateRedactionSettings(settings);
   const config = { ...validated, customRules: validated.customRules.map(legacyRuleFromType) };
   const disabled = new Set<BuiltinFilterId>(config.disabledBuiltins);
@@ -197,14 +197,15 @@ export function redactSemanticTree(tree: SemanticTree, settings: RedactionSettin
   };
 
   const redactNode = (node: SemanticNode, insideSensitiveField = false, insidePhoneField = false, insideMaskedField?: FieldMaskKind): SemanticNode => {
+    const fieldLabel = node.name || node.placeholder || '';
     const field = node.value !== undefined || FIELD_ROLES.has(node.role);
-    const phoneField = insidePhoneField || (field && /\b(?:phone|telephone|tel|mobile|fax)\b/iu.test(node.name ?? ''));
+    const phoneField = insidePhoneField || (field && /\b(?:phone|telephone|tel|mobile|fax)\b/iu.test(fieldLabel));
     const sensitiveField = field &&
-      ((enabled('sensitive-fields') && fieldNamePattern.test(node.name ?? '')) ||
-        (enabled('personal-fields') && personalFieldMaskKind(node.name ?? '') !== undefined) ||
-        customFieldPatterns.some(pattern => pattern.test(node.name ?? '')));
+      ((enabled('sensitive-fields') && fieldNamePattern.test(fieldLabel)) ||
+        (enabled('personal-fields') && personalFieldMaskKind(fieldLabel) !== undefined) ||
+        customFieldPatterns.some(pattern => pattern.test(fieldLabel)));
     const fieldMask = insideMaskedField === 'hide' ? 'hide'
-      : (maskPersonalFields && field ? personalFieldMaskKind(node.name ?? '') : undefined) ?? insideMaskedField;
+      : (maskPersonalFields && field ? personalFieldMaskKind(fieldLabel) : undefined) ?? insideMaskedField;
     const result: SemanticNode = {
       role: node.role,
       // AX trees may repeat a control value as text below generic wrappers.
@@ -212,7 +213,9 @@ export function redactSemanticTree(tree: SemanticTree, settings: RedactionSettin
     };
     if (node.id !== undefined) result.id = node.id;
     if (node.actionRef !== undefined) result.actionRef = node.actionRef;
+    if (node.captureIdentity !== undefined) result.captureIdentity = node.captureIdentity;
     if (node.name !== undefined) result.name = insideSensitiveField ? redactFieldText(node.name) : redactText(node.name, insidePhoneField, insideMaskedField);
+    if (node.placeholder !== undefined) result.placeholder = insideSensitiveField ? redactFieldText(node.placeholder) : redactText(node.placeholder, insidePhoneField, insideMaskedField);
     if (node.value !== undefined) {
       if (sensitiveField || insideSensitiveField) {
         result.value = redactFieldText(node.value);
@@ -220,6 +223,8 @@ export function redactSemanticTree(tree: SemanticTree, settings: RedactionSettin
         result.value = redactText(node.value, phoneField, fieldMask);
       }
     }
+    if (node.actionRef && fieldMask && fieldMask !== 'hide' && !sensitiveField && !insideSensitiveField &&
+      result.value !== undefined && result.value !== node.value && !result.value.includes('[REDACTED]')) onMaskedValueRef?.(node.actionRef);
     if (node.level !== undefined) result.level = node.level;
     if (node.href !== undefined) result.href = insideSensitiveField ? redactFieldText(node.href) : redactText(node.href, false, insideMaskedField);
     if (node.states !== undefined) result.states = { ...node.states };

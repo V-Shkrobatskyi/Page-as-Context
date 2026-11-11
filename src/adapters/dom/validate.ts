@@ -42,11 +42,12 @@ export function isDomCaptureOutcome(value: unknown, embedded = false, expectedDe
     const { node, depth } = stack.pop()!;
     if (seen.has(node) || seen.size >= DOM_CAPTURE_LIMITS.maxNodes || depth > DOM_CAPTURE_LIMITS.maxDepth + 1) return false;
     seen.add(node);
-    if (!onlyKeys(node, ['role', 'name', 'value', 'href', 'id', 'level', 'states', 'children', 'editable', 'actionRef'])) return false;
+    if (!onlyKeys(node, ['role', 'name', 'placeholder', 'value', 'href', 'id', 'level', 'states', 'children', 'editable', 'actionRef', 'captureIdentity'])) return false;
     if (node.actionRef !== undefined && (typeof node.actionRef !== 'string' || !/^[a-f0-9-]{36}$/u.test(node.actionRef))) return false;
+    if (node.captureIdentity !== undefined && (typeof node.captureIdentity !== 'string' || !/^[a-f0-9-]{36}$/u.test(node.captureIdentity))) return false;
     if (node.editable !== undefined && typeof node.editable !== 'boolean') return false;
     if (typeof node.role !== 'string' || !node.role || !validText(node.role) ||
-      !validText(node.name) || !validText(node.value) || !validText(node.href) || !validText(node.id) ||
+      !validText(node.name) || !validText(node.placeholder) || !validText(node.value) || !validText(node.href) || !validText(node.id) ||
       !Array.isArray(node.children)) return false;
     if (node.level !== undefined && (typeof node.level !== 'number' || !Number.isInteger(node.level) || node.level <= 0)) return false;
     if (node.states !== undefined) {

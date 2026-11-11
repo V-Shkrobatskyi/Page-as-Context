@@ -1379,3 +1379,43 @@ it.each(['read', 'write'])('recreates only Read for an existing Automatic %s sha
   const state = await controller.ui({ action: 'read' }, page);
   expect(state.sharedTabs!.flatMap((tab: any) => tab.connections).every((connection: any) => !connection.skipPrompts)).toBe(true);
 });
+
+
+it.each([['native', undefined], ['hfs', undefined], ['native', 'scoped'], ['hfs', 'scoped']] as const)('runs scoped fill through %s with responseMode=%s, invalidates refs and keeps receipt-only retries', async (route, responseMode) => {
+  writeMode(); await automaticClient();
+  if (route === 'hfs') { enableHttpSettings(); await controller.ui({ action: 'start' }, page); await controller.ui({ action: 'hfs-export-client', clientId: 'http_client_00000001' }, page); }
+  await share('write');
+  const run = route === 'hfs' ? httpCall : call;
+  const { connectionId } = (await run('list_shared_tabs')).tabs[0];
+  const tab = (await controller.ui({ action: 'read' }, page)).sharedTabs![0]!;
+  await controller.ui({ action: 'connection-approval', tabRef: tab.tabRef, connectionId, skip: true }, page);
+  let value = '', firstRef = '', fieldRef = '';
+  fixture.capture.mockImplementation(async () => {
+    fieldRef = crypto.randomUUID(); firstRef ||= fieldRef;
+    return { ok: true, tree: { schemaVersion: 1, root: { role: 'page', children: [
+      { role: 'textbox', name: 'Nickname', value, actionRef: fieldRef, captureIdentity: 'same-document-node', children: [] },
+      { role: 'button', name: 'Other control', actionRef: crypto.randomUUID(), children: [] },
+    ] } } };
+  });
+  fixture.action.mockImplementation(async command => { value = command.text; return { status: 'applied', parentTag: 'label' }; });
+  const before = await run('read_page_context', { connectionId });
+  const args = { connectionId, snapshotId: before.snapshotId, elementRef: firstRef, operationId: crypto.randomUUID(), text: 'Ukraine 🌻', ...(responseMode ? { responseMode } : {}) };
+  const result = await run('fill_element', args);
+  expect(result).toMatchObject({ status: 'applied', snapshot: { scope: { kind: 'scoped' } } });
+  expect(result).not.toHaveProperty('parentTag');
+  expect(result.snapshot.context).not.toContain('Other control');
+  expect(fixture.snapshots[0].dispose).toHaveBeenCalled(); expect(fixture.snapshots[0].scopeTree).toBeUndefined();
+  expect((await run('fill_element', { ...args, operationId: crypto.randomUUID() })).error).toBe('stale-snapshot');
+  const replay = await run('fill_element', args); expect(replay.status).toBe('applied'); expect(replay).not.toHaveProperty('snapshot');
+  expect(fixture.action).toHaveBeenCalledTimes(1);
+  expect(fixture.snapshots.every(snapshot => snapshot.scopeTree === undefined)).toBe(true);
+  const fullRead = await run('read_page_context', { connectionId });
+  const full = await run('fill_element', { ...args, snapshotId: fullRead.snapshotId, elementRef: fieldRef, operationId: crypto.randomUUID(), responseMode: 'full' });
+  expect(full.status).toBe('applied'); expect(full.snapshot).not.toHaveProperty('scope');
+  expect(full.snapshot.context).toContain('Other control');
+  const fresh = await run('read_page_context', { connectionId });
+  const capture = fixture.capture.getMockImplementation()!;
+  fixture.capture.mockImplementationOnce(capture).mockRejectedValueOnce(new Error('unavailable'));
+  const applied = await run('fill_element', { ...args, snapshotId: fresh.snapshotId, elementRef: fieldRef, operationId: crypto.randomUUID() });
+  expect(applied).toMatchObject({ status: 'applied', snapshotUnavailable: 'post-action-capture-unavailable' });
+});

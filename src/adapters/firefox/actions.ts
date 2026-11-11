@@ -11,6 +11,7 @@ interface World { __pageAsContextActions?: (command: WorldCommand) => unknown }
 
 /** Per-document weak registry; only the isolated world can install or call it. */
 export function createDomActionRegistry(doc: Document) {
+  const identities = new WeakMap<Element, string>();
   const sessions = new Map<string, { lease: ActionLease; root: WeakRef<Element>; url: string; nodes: Map<string, { node: WeakRef<Element>; signature: string }>; timer: ReturnType<typeof setTimeout> }>();
   const release = (snapshotId: string) => { const session = sessions.get(snapshotId); if (session) { clearTimeout(session.timer); session.nodes.clear(); sessions.delete(snapshotId); } };
   const scope = doc.defaultView as Window & World;
@@ -28,14 +29,14 @@ export function createDomActionRegistry(doc: Document) {
     if (command.optionRef && !option) return { status: 'rejected', error: 'stale-snapshot' };
     if (option && domOperation.call(option, { action: 'signature', sensitivePattern: ACTION_SENSITIVE_PATTERN }).signature !== session.nodes.get(command.optionRef!)?.signature) return { status: 'rejected', error: 'stale-snapshot' };
     const result = domOperation.call(element, { ...command, sensitivePattern: ACTION_SENSITIVE_PATTERN, signature: entry.signature }, option);
-    return result.applied ? { status: 'applied' } : { status: 'rejected', error: result.error === 'stale-snapshot' ? 'stale-snapshot' : 'unsupported-action' };
+    return result.applied ? { status: 'applied', ...(command.action === 'fill' && typeof result.parentTag === 'string' ? { parentTag: result.parentTag } : {}) } : { status: 'rejected', error: result.error === 'stale-snapshot' ? 'stale-snapshot' : 'unsupported-action' };
   };
   doc.defaultView?.addEventListener('pagehide', () => { for (const id of sessions.keys()) release(id); });
   return (lease: ActionLease, element: Element, node: SemanticNode) => {
     try { if (doc.defaultView !== doc.defaultView?.top && !doc.defaultView?.frameElement) return; }
     catch { return; }
     if (!ACTION_ROLES.has(node.role) || node.states?.disabled || /^(?:password|file|hidden)$/u.test((element as HTMLInputElement).type ?? '') ||
-      new RegExp(ACTION_SENSITIVE_PATTERN, 'iu').test(node.name ?? '') || lease.expires <= Date.now()) return;
+      new RegExp(ACTION_SENSITIVE_PATTERN, 'iu').test(node.name || node.placeholder || '') || lease.expires <= Date.now()) return;
     let session = sessions.get(lease.snapshotId);
     if (!session) {
       for (const [id, value] of sessions) if (value.lease.owner === lease.owner || value.lease.expires <= Date.now()) release(id);
@@ -45,7 +46,10 @@ export function createDomActionRegistry(doc: Document) {
     }
     if (session.nodes.size >= 10000) return;
     const signature = domOperation.call(element, { action: 'signature', sensitivePattern: ACTION_SENSITIVE_PATTERN }).signature as string;
-    const ref = crypto.randomUUID(); node.actionRef = ref; session.nodes.set(ref, { node: new WeakRef(element), signature });
+    const ref = crypto.randomUUID(); node.actionRef = ref;
+    let identity = identities.get(element);
+    if (!identity) { identity = crypto.randomUUID(); identities.set(element, identity); }
+    node.captureIdentity = identity; session.nodes.set(ref, { node: new WeakRef(element), signature });
   };
 }
 
@@ -57,7 +61,7 @@ export function dispatchDomAction(command: WorldCommand): unknown {
 export function createFirefoxActionSnapshot(tabId: number, lease: ActionLease): ActionSnapshot {
   let disposed = false;
   const dispose = () => {
-    if (disposed) return; disposed = true; clearTimeout(timer); targets.clear();
+    if (disposed) return; disposed = true; clearTimeout(timer); targets.clear(); snapshot.scopeTree = undefined;
     void browser.scripting.executeScript({ target: { tabId, allFrames: true }, world: 'ISOLATED', func: dispatchDomAction, args: [{ mode: 'release', lease }] }).catch(() => {});
   };
   const timer = setTimeout(dispose, Math.max(1, Math.min(lease.expires - Date.now(), 480 * 60000)));
@@ -87,5 +91,6 @@ export function createFirefoxActionSnapshot(tabId: number, lease: ActionLease): 
       return value;
     } catch { return { status: dispatched ? 'outcome-unknown' : 'rejected', error: dispatched ? 'outcome-unknown' : 'stale-snapshot' }; }
   };
-  return { ...lease, tabId, targets, run, dispose };
+  const snapshot: ActionSnapshot = { ...lease, tabId, targets, run, dispose };
+  return snapshot;
 }

@@ -5,6 +5,8 @@ import { readMcpContext } from './capture';
 import { MCP_SETTINGS_KEY, resolveMcpSettings, saveMcpSettings, automaticMcp, mcpWritesEnabled, autoDisconnectMilliseconds, type McpSettings } from './settings';
 import { assertAction, redactionMode } from '../policy/model';
 import { hasMcpTransmissionConsent, mcpBrowserPermissions } from './permissions';
+import type { SemanticTree } from '../core/model';
+import { waitForFillObservation, type FillScopeRequest } from './fill-scoped';
 import { OperationLedger, WRITE_TOOLS, actionArguments } from './operations';
 import { sourceAllowed } from '../policy/sources';
 import type { ActionSnapshot, ActionOutcome } from '../adapters/actions/contract';
@@ -99,7 +101,7 @@ export function createMcpController() {
     }, Math.max(1, expires - Date.now()));
   };
   const notifyTools = (clientId: string) => { try { for (const route of routes.values()) route.toolsChanged(clientId); } catch { /* Disconnect invalidates live grants. */ } };
-  const disposeSnapshot = (owner: string) => { snapshots.get(owner)?.dispose(); snapshots.delete(owner); };
+  const disposeSnapshot = (owner: string) => { const snapshot = snapshots.get(owner); if (snapshot) { snapshot.scopeTree = undefined; snapshot.dispose(); } snapshots.delete(owner); };
   const revokeClientAccess = (clientId: string) => {
     clientRegistryRevision++;
     (routes.get('hfs') as HfsTransport | undefined)?.revoke(clientId);
@@ -350,17 +352,17 @@ export function createMcpController() {
     if (request.request.tool === 'get_connection_status') return { connectionId: grant!.id, mode, capabilities, expiresAt: grant!.expires === UNLIMITED_EXPIRY ? null : grant!.expires, busy: !!grant!.busy,
       inputMechanism: import.meta.env.BROWSER === 'firefox' ? 'programmatic-dom-events' : 'cdp-pointer-and-native-dom-setters',
       frameActions: 'accessible-same-origin; transformed or cross-origin frame targets unsupported', customAriaWidgets: false };
-    const capture = async () => {
+    const capture = async (fillScope?: FillScopeRequest) => {
       disposeSnapshot(grant!.id);
       const result = await readMcpContext(grant!.tabId, authorize, false, controller.signal, undefined, { owner: grant!.id, write: mode === 'read-write', expires: grant!.expires,
-        retain: snapshot => snapshots.set(grant!.id, snapshot) });
+        retain: snapshot => snapshots.set(grant!.id, snapshot) }, fillScope);
       authorize(); return { ...result, connectionId: grant!.id };
     };
     if (action) {
       if (mode !== 'read-write' || !allowedWrites.includes(request.request.tool)) throw new Error('read-only');
       assertAction(effective.snapshot.policy, 'mcp-write');
       return ledger.execute(grant!.id, action, async () => {
-        const receipt = (outcome: ActionOutcome) => ({ operationId: action.operationId, ...outcome });
+        const receipt = (outcome: ActionOutcome) => ({ operationId: action.operationId, status: outcome.status, ...(outcome.error ? { error: outcome.error } : {}) });
         if (grant!.busy || busyTabs.has(grant!.tabId)) return receipt({ status: 'rejected', error: 'connection-busy' });
         grant!.busy = true; busyTabs.add(grant!.tabId);
         const snapshot = snapshots.get(grant!.id);
@@ -380,12 +382,34 @@ export function createMcpController() {
             if (approval !== 'allowed') return receipt({ status: 'rejected', error: approval });
           }
           await validate();
+          let before: SemanticTree | undefined, baselineRef = action.elementRef;
+          if (action.action === 'fill' && action.responseMode === 'scoped') {
+            // Collect an operation-local baseline. Long-lived action snapshots keep
+            // only node identities/refs, never a retained copy of form contents.
+            let temporary: ActionSnapshot | undefined;
+            try {
+              await readMcpContext(grant!.tabId, authorize, false, controller.signal, undefined, {
+                owner: 'fill-scope-' + crypto.randomUUID(), write: true, expires: grant!.expires, collectScopeTree: true,
+                retain: value => { temporary = value; },
+              });
+              const identity = snapshot.targets.get(action.elementRef)?.captureIdentity;
+              const target = identity && [...(temporary?.targets.values() ?? [])].find(value => value.captureIdentity === identity);
+              if (target) { before = temporary?.scopeTree; baselineRef = target.ref; }
+            } catch { await validate(); }
+            finally { if (temporary) { temporary.scopeTree = undefined; temporary.dispose(); } }
+            await validate();
+          }
           const outcome = await snapshot.run(action, controller.signal, validate);
           for (const peer of grants.values()) if (peer.tabId === grant!.tabId) disposeSnapshot(peer.id);
           technicalEvent({ code: 'mcp-write', result: outcome.status === 'applied' ? 'success' : 'error', reason: outcome.status === 'applied' ? 'none' : 'failed' });
           if (outcome.status !== 'applied') return receipt(outcome);
           refreshActivity();
-          try { const result = await capture(); return { ...receipt(outcome), snapshotId: result.snapshotId, snapshot: result }; }
+          try {
+            const scoped = action.action === 'fill' && action.responseMode === 'scoped';
+            if (scoped) { await waitForFillObservation(controller.signal); await validate(); }
+            const result = await capture(scoped ? { before, elementRef: baselineRef, parentTag: outcome.parentTag } : undefined);
+            return { ...receipt(outcome), snapshotId: result.snapshotId, snapshot: result };
+          }
           catch { return { ...receipt(outcome), snapshotUnavailable: 'post-action-capture-unavailable' }; }
         } catch { return receipt({ status: 'rejected', error: controller.signal.aborted ? 'approval-denied' : 'policy-blocked' }); }
         finally { if (snapshots.get(grant!.id) === snapshot) disposeSnapshot(grant!.id); grant!.busy = false; busyTabs.delete(grant!.tabId); }

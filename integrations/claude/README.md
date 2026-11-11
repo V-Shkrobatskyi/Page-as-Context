@@ -31,8 +31,8 @@ the exact production dependency lock is retained as `DEPENDENCY-LOCK.json`.
 identifies the resulting MCPB. Node and SDK licenses ship with the runtime.
 
 The checker unpacks the actual MCPB, validates its strict schema and inventory,
-preserved executable permission, bundled runtime, required browser selection,
-invalid-browser rejection and installed-copy discovery. For both browser choices
+preserved executable permission, bundled runtime, absence of installation-time
+browser selection, invalid-browser rejection and installed-copy discovery. For both browsers
 it verifies isolated setup through MCP, confirmation rejection, synthetic pairing/
 read/write denial and independent Claude profiles while preserving a synthetic
 ChatGPT profile. No real browser registrations or client settings are modified.
@@ -40,10 +40,12 @@ These are SDK/synthetic checks, not actual Claude installation or acceptance.
 
 ## Packaging decisions
 
-- One MCPB has one stdio server. Required `browser` configuration accepts exactly
-  `chrome` or `firefox`; no default silently selects a browser. The current schema
-  provides a text field rather than a browser enum. Invalid values fail closed
-  before setup. Configuration changes require extension restart and new tab grants.
+- One MCPB has one stdio process with independent `chrome_*` and `firefox_*`
+  tools. There is no required browser configuration at installation. The user
+  chooses a browser when asking the assistant to pair; both routes can stay
+  connected concurrently. Each route uses its own profile, approval and tab
+  grants. Missing connections and uncertain writes never fall back to another
+  route or replay. The existing explicit-browser Code entry points are retained.
 - `server.type` is `binary`, launching the bundled `runtime/node`. Claude's
   built-in Node version is not assumed compatible or used by this package.
   Browser-launched native hosts continue using the stable private runtime
@@ -118,3 +120,18 @@ The unpacked distribution checks passed on 9 November 2026. These are SDK and
 synthetic-endpoint checks, not a new live-browser qualification of 1.2.2. Prior
 live evidence retains its original package version. Existing installed packages
 are not modified or automatically upgraded.
+
+## Dual-browser Desktop candidate, package 1.2.4
+
+At the user's request, this build keeps version 1.2.4 and is emitted into a new
+artifact directory rather than replacing earlier archives. Same-version UI
+replacement and cache behavior require actual-client acceptance; the package
+installer's existing immutable-version checks are not disabled.
+
+`node scripts/mcp/check-claude-desktop-routing.mjs /path/to/bundle` checks the
+packaged server through MCP in-memory transports: concurrent routes, independent
+write discovery, no cross-browser fallback/replay, identical opaque IDs, list
+notifications, pending setup semantics, invalid requests, cleanup and a real
+stdio regression for the Claude Code entry point. The MCPB checker additionally
+uses the unpacked archive, bundled runtime and isolated synthetic native hosts
+to verify pairing/profile changes independently for Chrome and Firefox.

@@ -4,11 +4,33 @@ Private plugin for macOS Apple silicon (macOS 13.5+). Requires the browser
 extension and a workspace that permits local plugins. Includes its runtime;
 no global Node or separate setup app is needed.
 
-## Install and pair
+## Install in ChatGPT
 
-1. Install and enable **Page as Context** from the private local plugin catalog
-   supplied with this package, then fully quit and reopen the desktop client.
-   Use the full plugin, not the historical **Installation check** plugin.
+This archive-upload sequence was verified by the user with package **1.2.6**
+on 11 November 2026. No Terminal commands or separate setup app are needed.
+
+1. Open **Settings** and select **Plugins** in the menu.
+2. Click **Browse directory**, then **Add → Upload plugin archive**.
+3. In the **New Plugin** window, click **click to upload**.
+4. Select the file ending in **-plugin.zip** and click **Open**. For example:
+   `Page-as-Context-ChatGPT-1.2.4-macOS-arm64-plugin.zip`.
+5. Back in **New Plugin**, click **Add plugin** when the button becomes active.
+6. Wait for processing. In the verified installation this took about one minute,
+   then ChatGPT opened **Plugins / Page as Context**.
+7. Click **+ Install plugin** on that page. **Add plugin** adds the package to
+   the directory; **+ Install plugin** installs it for use. Both steps are needed.
+8. Return to the chat. A full app restart was not needed in the verified flow.
+
+Use the single-plugin **-plugin.zip**, not **-marketplace.zip**. The latter is
+for clients that offer local marketplace folder installation. The unpacked
+folder choices are `marketplace/` for a local marketplace or
+`marketplace/plugins/page-as-context/` for a local plugin. These are alternatives
+only when the client provides those folder actions, not part of the upload flow.
+
+## Connect a browser and share tabs
+
+1. If the browser is already paired, try sharing a tab before repeating setup.
+   Installing the plugin alone does not grant access to browser tabs.
 2. In the browser extension, open **MCP settings**, enable MCP and apply settings.
    Ask the assistant to set up Page as Context for Chrome or Firefox.
 3. In MCP settings use **Helper connection → Copy setup info** and give the
@@ -35,6 +57,15 @@ Shared access controls, reconnect and troubleshooting are in the [MCP user guide
 
 ## Update or remove
 
-Install a new version through the private catalog and restart ChatGPT.
+Upload the new **-plugin.zip** through the same **Settings → Plugins →
+Browse directory → Add → Upload plugin archive** flow. Finish the installation
+on the plugin page; uploading the archive alone is not the final step.
+If you installed through a local catalog instead, update through that source.
+Return to the chat and ask the assistant to check plugin availability. If the
+client still exposes old or missing tools, try a new chat or restart ChatGPT;
+restarting is a troubleshooting step, not a required part of the verified flow.
+If an archive is rejected, retain the exact error and client version; do not
+remove runtime files or dependencies manually. Archive checks use published
+portal limits and do not guarantee acceptance by every desktop client.
 To remove it, revoke its client in the browser, remove the plugin and restart
 the app. Keep the shared bridge and other clients' profiles intact.

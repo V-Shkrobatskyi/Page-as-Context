@@ -11,7 +11,7 @@ These guides contain the installation steps, updates and removal instructions:
 
 | AI app | Installation guide | Package format |
 | --- | --- | --- |
-| ChatGPT desktop | [ChatGPT guide](../integrations/chatgpt/PACKAGE-README.md) | Private plugin catalog |
+| ChatGPT desktop | [ChatGPT guide](../integrations/chatgpt/PACKAGE-README.md) | Plugin ZIP upload through Settings → Plugins |
 | Claude Desktop / Claude Code | [Claude guide](../integrations/claude/PACKAGE-README.md) | Desktop MCPB / Code plugin directory |
 | Antigravity App | [Antigravity guide](../integrations/antigravity/PACKAGE-README.md) | Local plugin directory |
 | GitHub Copilot app | [Copilot guide](../integrations/github-copilot-app/PACKAGE-README.md) | Local marketplace, installed through Customize |

@@ -13,8 +13,8 @@ No separate desktop setup application or remote server is built or required.
 ## Build
 
 Requires macOS Apple silicon, Node.js 24.10.0/npm 11.6.0, cached locked npm
-dependencies and the official Node archive. No Swift compiler or Xcode build
-is involved. End users do not need the build tools or a globally installed Node.
+dependencies and the official Node archive. Python 3 and the macOS command-line strip/codesign tools are required to build
+the upload-compatible package. No Swift application is built. End users do not need the build tools or a globally installed Node.
 
 ```sh
 node scripts/mcp/build-chatgpt-package.mjs \
@@ -26,8 +26,10 @@ The default version comes from `package/plugin.json`. The output contains
 `marketplace/`, a distributable plugin ZIP, `README.md` and `SHA256SUMS.txt`.
 The archive hash is checked before the runtime is extracted. Existing output
 folders and installed versions are preserved; changed package bytes require a
-new version after installation. Register/install `marketplace/` as a private
-local plugin source using the supported desktop plugin tooling. This build is
+new version after installation. For the verified no-Terminal user flow, upload **-plugin.zip** through
+**Settings → Plugins → Browse directory → Add → Upload plugin archive**,
+then complete **Add plugin** and **+ Install plugin** as described in the user
+guide. Keep `marketplace/` for clients with folder-based installation. This build is
 not submitted to a public directory.
 
 ## Verify the installed copy
@@ -96,3 +98,34 @@ The unpacked distribution checks passed on 9 November 2026. These are SDK and
 synthetic-endpoint checks, not a new live-browser qualification of 1.2.2. Prior
 live evidence retains its original package version. Existing installed packages
 are not modified or automatically upgraded.
+
+## Archive packaging fix 1.2.5
+
+ChatGPT builds now emit a single-plugin `-plugin.zip` for the UI upload and a
+separate `-marketplace.zip` for folder installation. ZIPs have no AppleDouble
+metadata or directory entries. Runtime symbol stripping and ad-hoc signing
+reduce the Node executable below the published 100 MiB member limit. The
+original official archive hash, upstream executable hash, transformed hash and
+transformation are recorded in DEPENDENCIES.json. Runtime version and signature
+are checked during builds. Development-only dependency files are omitted; runtime
+JS, package metadata, licenses and pinned versions remain. Other client builders
+retain their existing behavior.
+
+`ARCHIVE-CHECK.json` records compressed/extracted bytes, entries and largest member.
+The builder rejects archives exceeding the published portal limits (100 MB ZIP,
+100 MiB member, 512 MiB extracted, 5,000 entries, 20 path segments), unsafe paths
+and case/Unicode collisions. These limits are not proof of desktop UI acceptance.
+Use the bundled-runtime package check for each browser and separately accept the
+actual archive upload in the desktop app. Never change an installed version's
+bytes; the packaging fix is ChatGPT package 1.2.5, independent of extension 2.2.4.
+
+## User-verified ChatGPT installation, 11 November 2026
+
+Package 1.2.6 was uploaded and installed through the ChatGPT UI. The verified
+sequence and distinct Add plugin / + Install plugin actions are in
+[the user guide](PACKAGE-README.md#install-in-chatgpt). After installation the
+user returned directly to the existing chat without a required restart.
+The chat loaded the 1.2.6 skill and successfully invoked Chrome list/read tools.
+This is not acceptance of write-tool discovery: fill_element was still absent
+from the chat's callable tools; Chrome grants were read-only and Firefox had no
+shared tabs. Do not infer write availability merely from the installed version.

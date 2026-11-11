@@ -1,0 +1,5 @@
+interface:
+  display_name: "Browser setup"
+  short_description: "Connect or reconnect Chrome or Firefox."
+  icon_small: "./assets/page-as-context.png"
+  icon_large: "./assets/page-as-context.png"

@@ -17,11 +17,15 @@ export interface NodeStates {
 export interface SemanticNode {
   /** Opaque, transient adapter reference. Never a selector or browser node ID. */
   actionRef?: string;
+  /** Internal document identity, never serialized to a tool response. */
+  captureIdentity?: string;
   /** Adapter-identified editable content, before compression. */
   editable?: boolean;
   id?: string;
   role: string;
   name?: string;
+  /** Visible input hint, distinct from the computed accessible name. */
+  placeholder?: string;
   value?: string;
   level?: number;
   href?: string;

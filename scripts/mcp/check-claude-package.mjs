@@ -43,10 +43,9 @@ try {
   assert.equal(manifest.server.type, 'binary');
   assert.equal(manifest.server.entry_point, 'runtime/node');
   assert.equal(manifest.server.mcp_config.command, '${__dirname}/runtime/node');
-  assert.deepEqual(manifest.server.mcp_config.args, ['${__dirname}/server.mjs', '${user_config.browser}']);
-  assert.equal(manifest.user_config.browser.required, true);
-  assert.equal(manifest.user_config.browser.default, undefined);
-  const topLevel = new Set(['manifest.json', 'server.mjs', 'README.md', 'LICENSE', 'PACKAGE.json', 'DEPENDENCIES.json', 'DEPENDENCY-LOCK.json', 'helper', 'runtime', '.claude-plugin', '.mcp.json', 'plugin.json', 'skills']);
+  assert.deepEqual(manifest.server.mcp_config.args, ['${__dirname}/server.mjs']);
+  assert.equal(manifest.user_config, undefined, 'Installation must not ask for a browser.');
+  const topLevel = new Set(['manifest.json', 'server.mjs', 'desktop-server.mjs', 'README.md', 'LICENSE', 'PACKAGE.json', 'DEPENDENCIES.json', 'DEPENDENCY-LOCK.json', 'helper', 'runtime', '.claude-plugin', '.mcp.json', 'plugin.json', 'skills', 'assets']);
   for (const name of await readdir(installed)) assert.ok(topLevel.has(name), `Unexpected root entry: ${name}`);
   const codeManifest = JSON.parse(await readFile(join(installed, '.claude-plugin/plugin.json'), 'utf8'));
   const codeServers = JSON.parse(await readFile(join(installed, '.mcp.json'), 'utf8')).mcpServers;
@@ -80,19 +79,27 @@ try {
     try {
       client = new Client({ name: 'claude-installed-copy-check', version: '1' });
       await client.connect(new StdioClientTransport({ command: runtime,
-        args: [join(installed, 'server.mjs'), browser, '--directory', state, '--manifest-home', join(root, `${browser} isolated manifests`)],
+        args: [join(installed, 'server.mjs'), '--directory', state, '--manifest-home', join(root, `${browser} isolated manifests`)],
         cwd: root, env: { PATH: '/usr/bin:/bin' }, stderr: 'pipe' }));
       assert.equal(client.getServerVersion().version, manifest.version);
-      assert.match(client.getInstructions(), new RegExp(`configured for ${browser}`, 'u'));
+      assert.match(client.getInstructions(), /supports Chrome and Firefox together/u);
       assert.match(client.getInstructions(), /explicit user approval before confirm_browser_setup/u);
-      assert.equal((await client.listTools()).tools.length, 9);
-      const call = async (name, args = {}) => JSON.parse((await client.callTool({ name, arguments: args })).content[0].text);
+      const initialTools = (await client.listTools()).tools;
+      assert.equal(initialTools.length, 18);
+      assert.ok(initialTools.some(tool => tool.name === 'chrome_setup_status'));
+      assert.ok(initialTools.some(tool => tool.name === 'firefox_setup_status'));
+      const call = async (name, args = {}) => JSON.parse((await client.callTool({ name: `${browser}_${name}`, arguments: args })).content[0].text);
       const initial = await call('setup_status');
+      const otherBrowser = browser === 'chrome' ? 'firefox' : 'chrome';
+      const peerStatus = JSON.parse((await client.callTool({ name: `${otherBrowser}_setup_status`, arguments: {} })).content[0].text);
+      assert.equal(peerStatus.profileConfigured, false);
       assert.equal(initial.nativeInstalled, false); assert.equal(initial.profileConfigured, false, 'Never adopt ChatGPT credentials.');
       assert.equal(initial.clientName, `Claude Desktop — ${browser === 'chrome' ? 'Chrome' : 'Firefox'}`);
-      assert.equal((await client.callTool({ name: 'read_page_context', arguments: { connectionId: 'synthetic_connection_001' } })).isError, true);
+      assert.equal((await client.callTool({ name: `${browser}_read_page_context`, arguments: { connectionId: 'synthetic_connection_001' } })).isError, true);
       const plan = await call('prepare_browser_setup', { instanceId, extensionId });
       assert.equal(plan.confirmationRequired, true);
+      const wrongRoute = JSON.parse((await client.callTool({ name: `${otherBrowser}_confirm_browser_setup`, arguments: { requestId: plan.requestId, confirmed: true } })).content[0].text);
+      assert.equal(wrongRoute.error, 'setup-confirmation-required');
       assert.deepEqual(await readdir(state), ['chatgpt']);
       assert.equal((await call('confirm_browser_setup', { requestId: plan.requestId, confirmed: false })).error, 'setup-confirmation-required');
       assert.equal((await call('confirm_browser_setup', { requestId: plan.requestId, confirmed: true })).error, undefined);
@@ -136,7 +143,7 @@ try {
       assert.equal(rejection.error, 'approval-denied');
       const { profileStore } = await from('helper/src/profile-store.mjs');
       await checkProfileSwitch({ call, config, browser, extensionId, profiles: profileStore(browser, join(state, 'claude/profiles')), connectSocket, readFrames, writeFrame, resultChunks, protocol: PROTOCOL });
-      results.push({ browser, tools: 13, cleanIsolatedSetup: true, instanceSwitchAndCancellation: true, chatgptProfileUntouched: true, syntheticPairingReadWriteDenial: true });
+      results.push({ browser, browserPrefixedTools: true, cleanIsolatedSetup: true, instanceSwitchAndCancellation: true, chatgptProfileUntouched: true, syntheticPairingReadWriteDenial: true });
     } finally {
       await client?.close().catch(() => {}); native?.destroy();
       if (config) await stopOwnedBroker(config);
@@ -144,6 +151,6 @@ try {
   }
   console.log(JSON.stringify({ passed: true, version: manifest.version, schema: manifest.manifest_version,
     archiveSha256: hash(await readFile(archive)), files: Object.keys(index.files).length + 1,
-    installedCopy: true, globalNodeRequired: false, explicitBrowserRequired: true, results,
+    installedCopy: true, globalNodeRequired: false, installationBrowserRequired: false, dualBrowserTools: true, results,
     limitation: 'SDK and synthetic endpoint only. Actual Claude UI installation, permissions and browser acceptance remain separate.' }, null, 2));
 } finally { await rm(root, { recursive: true, force: true }); }

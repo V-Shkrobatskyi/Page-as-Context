@@ -5,7 +5,7 @@
 export function domOperation(this: Element, args: { action: string; text?: string; checked?: boolean; sensitivePattern: string; signature?: string }, option?: Element): Record<string, unknown> {
   const element = this as HTMLInputElement;
   const doc = element.ownerDocument, win = doc.defaultView!;
-  const label = [element.getAttribute('aria-label'), element.getAttribute('name'), element.id, element.getAttribute('autocomplete'),
+  const label = [element.getAttribute('aria-label'), element.getAttribute('name'), element.id, element.getAttribute('autocomplete'), element.getAttribute('placeholder'),
     ...Array.from(element.labels ?? []).slice(0, 8).map(label => label.textContent?.slice(0, 2048))].join(' ').slice(0, 16384);
   const signature = JSON.stringify([element.localName, element.getAttribute('type'), element.getAttribute('role'), label,
     ['button', 'a', 'option'].includes(element.localName) ? element.textContent?.slice(0, 4096) : '', element.localName === 'option' ? element.getAttribute('value') : '']);
@@ -50,6 +50,12 @@ export function domOperation(this: Element, args: { action: string; text?: strin
     const supported = element.localName === 'textarea' || element.localName === 'input' && ['text', 'search', 'email', 'tel', 'url'].includes(element.type);
     if (!supported || new RegExp(args.sensitivePattern, 'iu').test(label) || /(?:cc-|password|one-time-code)/iu.test(element.autocomplete)) return { error: 'unsupported-action' };
     if (args.action === 'prepare-fill') { element.focus(); element.select(); return { prepared: true }; }
+    element.focus();
+    const focusedStyle = win.getComputedStyle(element);
+    if (!element.isConnected || element.matches(':disabled') || element.readOnly ||
+      element.closest('[hidden],[inert],[aria-hidden="true"],[aria-disabled="true"]') ||
+      focusedStyle.visibility !== 'visible' || focusedStyle.display === 'none' || focusedStyle.opacity === '0' ||
+      domOperation.call(element, { action: 'signature', sensitivePattern: args.sensitivePattern }).signature !== signature) return { error: 'stale-snapshot' };
     const prototype = element.localName === 'textarea' ? win.HTMLTextAreaElement.prototype : win.HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(prototype, 'value')!.set!.call(element, args.text);
   } else if (args.action === 'set-checked' || args.action === 'inspect-checked') {
@@ -63,7 +69,9 @@ export function domOperation(this: Element, args: { action: string; text?: strin
       (option as HTMLOptionElement).disabled || option.parentElement?.matches('optgroup:disabled')) return { error: 'stale-snapshot' };
     (element as unknown as HTMLSelectElement).selectedIndex = (option as HTMLOptionElement).index;
   } else return { error: 'unsupported-action' };
-  element.dispatchEvent(new win.Event('input', { bubbles: true, composed: true }));
+  element.dispatchEvent(args.action === 'fill'
+    ? new win.InputEvent('input', { bubbles: true, composed: true, inputType: 'insertReplacementText', data: args.text ?? '' })
+    : new win.Event('input', { bubbles: true, composed: true }));
   element.dispatchEvent(new win.Event('change', { bubbles: true }));
-  return { applied: true };
+  return { applied: true, ...(args.action === 'fill' ? { parentTag: element.parentElement?.localName } : {}) };
 }

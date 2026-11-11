@@ -13,13 +13,13 @@ export function toolCatalog() {
   const idSchema = { type: 'string', pattern: '^[a-zA-Z0-9_-]{16,80}$', minLength: 16, maxLength: 80 };
   const writes = [
     ['click_element', 'Click a supported control in the current snapshot. Requires write access and browser approval. A click may submit data or cause an irreversible change.', {}],
-    ['fill_element', 'Replace text in a supported native text control. Sensitive, password and file controls are unsupported. The entered value is not echoed in the action receipt.', { text: { type: 'string', maxLength: 10000 } }],
+    ['fill_element', 'Replace text in a supported native text control. Sensitive, password and file controls are unsupported. The entered value is not echoed in the action receipt. By default, returns only the field, a parent summary and changed status/alert regions when safe; otherwise a full fallback with a reason. Set responseMode full to request the complete page. After scoped, use read_page_context for other fields; old refs are invalid. Applied does not confirm application persistence. Never replay a write to refresh context.', { text: { type: 'string', maxLength: 10000 }, responseMode: { type: 'string', enum: ['full', 'scoped'], default: 'scoped' } }],
     ['select_option', 'Select a native option referenced in the same snapshot. Requires write access and browser approval. Arbitrary selectors and scripts are not accepted.', { optionRef: idSchema }],
     ['set_checked', 'Set a native checkbox to the desired boolean state. Requires write access and browser approval. Does not blindly toggle the control.', { checked: { type: 'boolean' } }],
   ];
   for (const [name, description, additional] of writes) tools.push({ name, description,
     inputSchema: { type: 'object', properties: { connectionId: idSchema, snapshotId: idSchema, elementRef: idSchema, operationId: idSchema, ...additional },
-      required: ['connectionId', 'snapshotId', 'elementRef', 'operationId', ...Object.keys(additional)], additionalProperties: false },
+      required: ['connectionId', 'snapshotId', 'elementRef', 'operationId', ...Object.keys(additional).filter(key => key !== 'responseMode')], additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true } });
   return tools;
 }
