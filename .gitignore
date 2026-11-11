@@ -41,3 +41,6 @@ artifacts/mcp/
 
 # Local browser build archives
 artifacts/extension/
+
+# Python packaging tool cache
+__pycache__/

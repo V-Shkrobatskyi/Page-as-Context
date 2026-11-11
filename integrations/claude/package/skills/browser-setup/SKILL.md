@@ -11,12 +11,17 @@ or approve access. Setup does not grant access to any tab.
 2. Ask the user for the browser instance ID displayed in the extension's MCP
    settings and the extension ID. For Chrome this is the 32-letter extension ID;
    for Firefox it is the add-on's Gecko ID, not its `moz-extension` URL UUID.
-3. Call `prepare_browser_setup` with `instanceId` and `extensionId`. Show the
-   returned changes and ask the user to approve them. Explain if an existing
-   bridge will restart and end active connections. Do not call confirm until
-   the user explicitly approves this plan. A token or `confirmed` argument is
-   not evidence of human approval; the client should also prompt for the
-   mutating `confirm_browser_setup` tool.
+3. Call `prepare_browser_setup` with `instanceId` and `extensionId`. Briefly
+   explain the actual changes and ask the user to approve them. For an instance
+   switch, for example: "Switch this client's connection to this Firefox instance?
+   After pairing, grant tab access again." Include any bridge restart or loss of
+   active connections reported by the plan. Keep the explanation focused on the
+   user's connection; do not volunteer skill paths, internal instructions or
+   policy quotations unless requested or required by the host environment.
+   Wait for explicit approval of the prepared changes before confirming. If the
+   user has already approved this same current plan, continue without asking
+   again. A token or `confirmed` argument is not evidence of human approval;
+   the client should also prompt for the mutating `confirm_browser_setup` tool.
 4. Call `confirm_browser_setup` with its `requestId` and `confirmed: true`.
    Automatic mode connects the bridge; use **Retry connection** if needed. Only in Manual mode ask for **Start helper connection**. Call
    `get_pairing_status` using that request ID. If still waiting, tell the user

@@ -1,9 +1,12 @@
 {
   "name": "page-as-context",
-  "version": "1.2.2",
+  "version": "1.2.4",
   "description": "Page as Context for Claude: shared browser context and explicitly authorized page actions.",
   "author": {
     "name": "Vitalii Shkrobatskyi"
   },
-  "license": "GPL-3.0-only"
+  "license": "GPL-3.0-only",
+  "homepage": "https://github.com/V-Shkrobatskyi/Page-as-Context",
+  "repository": "https://github.com/V-Shkrobatskyi/Page-as-Context",
+  "icon": "./assets/page-as-context.png"
 }
