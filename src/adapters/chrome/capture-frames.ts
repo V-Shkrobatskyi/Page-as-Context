@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Vitalii Shkrobatskyi
 // SPDX-License-Identifier: GPL-3.0-only
+import { domOperation } from '../actions/dom-operation';
+import { ACTION_ROLES } from '../actions/contract';
 
 import { sourceAllowed } from '../../policy/sources';
 import { FORM_ROLES } from '../../core/data-controls';
@@ -91,7 +93,7 @@ function checkSnapshot(value: unknown, budget: { nodes: number; characters: numb
     const encoded = JSON.stringify(raw);
     budget.bytes += new TextEncoder().encode(encoded).length;
     const url = Array.isArray(node.properties) ? node.properties.find((property) => record(property).name === 'url') : undefined;
-    for (const text of [record(node.role).value, record(node.name).value, record(node.value).value, record(record(url).value).value]) {
+    for (const text of [record(node.role).value, record(node.name).value, record(node.description).value, record(node.value).value, record(record(url).value).value]) {
       if (typeof text === 'string') budget.characters += text.length;
     }
     if (budget.bytes > LIMITS.rawBytes || budget.characters > LIMITS.characters) throw new CaptureFailure('capture-limit', 'The page exceeds the capture limit.');
@@ -252,6 +254,7 @@ export function createFrameCapturer(client: ChromeDebuggerClient) {
       if (response.exceptionDetails) return undefined;
       return record(response.result).value;
     };
+    const probes = new WeakMap<Frame, { eligible: Set<number>; hints: Map<number, string> }>();
     const snapshot = async (frame: Frame) => {
       if (!frame.session.ax) {
         frame.session.ax = true;
@@ -259,6 +262,8 @@ export function createFrameCapturer(client: ChromeDebuggerClient) {
       }
       const data = await command(frame.session, 'Accessibility.getFullAXTree', { frameId: frame.id });
       frame.snapshot = checkSnapshot(data, budget);
+      const addresses = { eligible: new Set<number>(), hints: new Map<number, string>() };
+      probes.set(frame, addresses);
       if (frame.snapshot.nodes.some((node) => node.frameId !== undefined && node.frameId !== frame.id)) {
         throw new CaptureFailure('invalid-tree', 'Chrome returned an unexpected document.');
       }
@@ -281,7 +286,7 @@ export function createFrameCapturer(client: ChromeDebuggerClient) {
               queue.push(...child?.childIds ?? []);
             }
             if (node.name?.value === node.value?.value || node.name?.sources?.some(source => source.type === 'contents' && !source.superseded) && !['checkbox', 'radio', 'switch', 'menuitemcheckbox', 'menuitemradio'].includes(String(node.role?.value))) delete node.name;
-            delete node.value;
+            delete node.value; delete node.description;
             // AX may repeat editable descendants in an ancestor's content-based name.
             const ancestors = [...parents.get(node.nodeId) ?? []];
             const seen = new Set<string>();
@@ -312,7 +317,7 @@ export function createFrameCapturer(client: ChromeDebuggerClient) {
         }
         if (password === 'empty' && node.value === undefined && controls?.data?.includeFormValues !== false) node.value = { type: 'string', value: '' };
         if (password !== false && password !== 'empty') {
-          delete node.value;
+          delete node.value; delete node.description;
           const queue = [...node.childIds ?? []];
           const byId = new Map(frame.snapshot.nodes.map((item) => [item.nodeId, item]));
           while (queue.length) {
@@ -325,6 +330,22 @@ export function createFrameCapturer(client: ChromeDebuggerClient) {
         }
       }
       frame.snapshot.nodes = frame.snapshot.nodes.filter((node) => !suppressed.has(node.nodeId));
+      for (const node of frame.snapshot.nodes) {
+        if (!node.backendDOMNodeId || !['textbox', 'searchbox', 'combobox'].includes(String(node.role?.value)) ||
+          node.name?.value && !node.name.sources?.some(source => source.type === 'placeholder' && !source.superseded)) continue;
+        const hint = await inspect(frame.session, node.backendDOMNodeId,
+          'function() { const w = this.ownerDocument.defaultView; const s = w.getComputedStyle(this); return ["input", "textarea"].includes(this.localName) && this.type !== "password" && this.value === "" && s.visibility === "visible" && s.display !== "none" && !this.closest("[hidden],[inert],[aria-hidden=true]") ? this.getAttribute("placeholder") : undefined; }');
+        if (typeof hint === 'string' && hint.trim()) addresses.hints.set(node.backendDOMNodeId, hint.replace(/\s+/gu, ' ').trim());
+      }
+      if (controls?.actions) for (const node of frame.snapshot.nodes) {
+        if (!node.backendDOMNodeId || !ACTION_ROLES.has(String(node.role?.value))) continue;
+        // The same fixed eligibility implementation is used by DOM capture and
+        // dispatch. This probe does not focus, scroll or emit events.
+        const eligibility = await inspect(frame.session, node.backendDOMNodeId,
+          `function() { return (${domOperation.toString()}).call(this, { action: "eligibility", sensitivePattern: "" }); }`);
+        if (record(eligibility).eligible === true && (record(eligibility).customButton !== true || typeof node.name?.value === 'string' && !!node.name.value.trim())) addresses.eligible.add(node.backendDOMNodeId);
+      }
+
     };
 
     try {
@@ -505,7 +526,9 @@ export function createFrameCapturer(client: ChromeDebuggerClient) {
         const normalized = normalizeChromeAxTree(frame.snapshot, {
           frameId: frame.id,
           onNode(raw, node) {
-            if (controls?.actions && (!frame.parentId || frame.origin && rootId && frame.origin === frames.get(rootId)?.origin)) {
+            const hint = raw.backendDOMNodeId === undefined ? undefined : probes.get(frame)?.hints.get(raw.backendDOMNodeId);
+            if (hint) { delete node.name; node.placeholder = hint; }
+            if (controls?.actions && raw.backendDOMNodeId !== undefined && probes.get(frame)?.eligible.has(raw.backendDOMNodeId) && (!frame.parentId || frame.origin && rootId && frame.origin === frames.get(rootId)?.origin)) {
               rememberChromeTarget(controls.actions, raw, node, { id: frame.id, loaderId: frame.loaderId, targetId: frame.session.targetId });
             }
             if (raw.backendDOMNodeId !== undefined) owners.set(raw.backendDOMNodeId, node);

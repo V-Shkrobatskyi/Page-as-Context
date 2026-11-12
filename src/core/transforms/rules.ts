@@ -22,6 +22,8 @@ export function hasSemanticAttributes(node: SemanticNode): boolean {
   return (
     node.name !== undefined ||
     node.placeholder !== undefined ||
+    node.description !== undefined ||
+    node.errorMessage !== undefined ||
     node.value !== undefined ||
     node.level !== undefined ||
     node.href !== undefined ||

@@ -5,7 +5,7 @@ import { normalizeChromeAxTree } from '@/src/adapters/chrome/normalize-ax';
 import type { ChromeAxNode, ChromeAxValue } from '@/src/adapters/chrome/types';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
-function fixture(name: ChromeAxValue | undefined, currentName = name, overrides: Partial<ChromeAxNode> = {}, action: 'fill' | 'set-checked' | 'select-option' = 'fill') {
+function fixture(name: ChromeAxValue | undefined, currentName = name, overrides: Partial<ChromeAxNode> = {}, action: 'click' | 'fill' | 'set-checked' | 'select-option' = 'fill') {
   const lease = { owner: crypto.randomUUID(), snapshotId: crypto.randomUUID(), expires: Date.now() + 10000 };
   const snapshot = createChromeActionSnapshot(7, lease);
   const frame = { id: 'iframe', loaderId: 'loader', targetId: 'oopif' };
@@ -25,7 +25,7 @@ function fixture(name: ChromeAxValue | undefined, currentName = name, overrides:
       : method === 'Page.createIsolatedWorld' ? { executionContextId: 9 }
       : method === 'Accessibility.getPartialAXTree' ? { nodes: [{ nodeId: 'control', backendDOMNodeId: params.backendNodeId, name: currentName, ...overrides }] }
       : method === 'DOM.resolveNode' ? { object: { objectId: `object-${params.backendNodeId}` } }
-      : method === 'Runtime.callFunctionOn' ? { result: { value: { applied: true } } } : {};
+      : method === 'Runtime.callFunctionOn' ? { result: { value: action === 'click' ? { x: 25, y: 40 } : { applied: true } } } : {};
     done(response);
   });
   vi.stubGlobal('chrome', { runtime: {}, debugger: { attach: (_t: unknown, _v: unknown, done: () => void) => done(), sendCommand, detach: vi.fn((_t, done) => done()) } });
@@ -66,4 +66,29 @@ it.each([{ id: 'iframe', loaderId: 'different-loader' }, { id: 'different-frame'
     else original(target, method, params, done);
   });
   try { expect((await f.run()).error).toBe('stale-snapshot'); expect(f.commands).not.toContain('DOM.resolveNode'); expect(f.commands).toContain('Target.detachFromTarget'); } finally { f.snapshot.dispose(); }
+});
+
+it('dispatches one pointer pair for a click and prunes addresses omitted from the response', async () => {
+  const f = fixture({ value: 'Next' }, undefined, {}, 'click');
+  try {
+    expect(await f.run()).toEqual({ status: 'applied' });
+    expect(f.commands.filter(method => method === 'Input.dispatchMouseEvent')).toHaveLength(2);
+    expect(f.sendCommand.mock.calls.filter(([, method]) => method === 'Input.dispatchMouseEvent').map(([, , params]) => params.type)).toEqual(['mousePressed', 'mouseReleased']);
+    await f.snapshot.retainOnly!([]);
+    expect(await f.run()).toEqual({ status: 'rejected', error: 'stale-snapshot' });
+    expect(f.commands.filter(method => method === 'Input.dispatchMouseEvent')).toHaveLength(2);
+  } finally { f.snapshot.dispose(); }
+});
+it.each(['before-dispatch', 'after-dispatch'])('distinguishes click failure %s and releases CDP resources', async when => {
+  const f = fixture({ value: 'Next' }, undefined, {}, 'click'), original = f.sendCommand.getMockImplementation()!;
+  f.sendCommand.mockImplementation((target, method, params, done) => {
+    if (when === 'before-dispatch' && method === 'Runtime.callFunctionOn') { f.commands.push(method); done({ result: { value: { error: 'unsupported-action' } } }); }
+    else if (when === 'after-dispatch' && method === 'Input.dispatchMouseEvent') { f.commands.push(method); (globalThis as any).chrome.runtime.lastError = { message: 'transport lost' }; done(undefined); delete (globalThis as any).chrome.runtime.lastError; }
+    else original(target, method, params, done);
+  });
+  try {
+    expect((await f.run()).status).toBe(when === 'before-dispatch' ? 'rejected' : 'outcome-unknown');
+    expect(f.commands.filter(method => method === 'Input.dispatchMouseEvent')).toHaveLength(when === 'before-dispatch' ? 0 : 1);
+    expect(f.commands).toContain('Runtime.releaseObjectGroup'); expect(f.commands).toContain('Target.detachFromTarget');
+  } finally { f.snapshot.dispose(); }
 });

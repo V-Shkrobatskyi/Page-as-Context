@@ -160,6 +160,7 @@ export function normalizeChromeAxTree(response: ChromeAxTreeResponse, options: {
   const visited = new Set<string>();
   let traversalFailure: 'cycle' | 'missing-role' | undefined;
 
+  const normalizedByBackend = new Map<number, SemanticNode>();
   const normalizeNode = (node: ChromeAxNode): SemanticNode | undefined => {
     if (visiting.has(node.nodeId)) {
       traversalFailure = 'cycle';
@@ -197,10 +198,13 @@ export function normalizeChromeAxTree(response: ChromeAxTreeResponse, options: {
     const href = stringValue(properties.get('url'));
     const states = statesFrom(properties);
     if (name !== undefined) normalized.name = name;
+    const description = stringValue(node.description);
+    if (description !== undefined) normalized.description = description;
     if (value !== undefined) normalized.value = value;
     if (level !== undefined) normalized.level = level;
     if (href !== undefined) normalized.href = href;
     if (states !== undefined) normalized.states = states;
+    if (node.backendDOMNodeId !== undefined && !node.ignored) normalizedByBackend.set(node.backendDOMNodeId, normalized);
     options.onNode?.(node, normalized);
     return normalized;
   };
@@ -211,6 +215,28 @@ export function normalizeChromeAxTree(response: ChromeAxTreeResponse, options: {
       'The AX node graph is cyclic, disconnected, or has a node without a role.');
   }
 
+  // Resolve only text already present in this document's exposed semantic tree.
+  // Never copy raw IDREF strings or CDP related-node text into the core model.
+  for (const raw of nodes) {
+    const target = raw.backendDOMNodeId === undefined ? undefined : normalizedByBackend.get(raw.backendDOMNodeId);
+    const properties = propertiesByName(raw.properties);
+    if (!target || !['true', true].includes(properties.get('invalid')?.value as string | boolean)) continue;
+    const refs = properties.get('errormessage')?.relatedNodes ?? [];
+    if (refs.length > 8) continue;
+    const messages = refs.flatMap(ref => {
+      const related = normalizedByBackend.get(ref.backendDOMNodeId);
+      if (!related || related === target) return [];
+      const texts: string[] = [], stack = [related]; let count = 0;
+      while (stack.length) {
+        const node = stack.pop()!;
+        if (++count > 80) return [];
+        if (['textbox', 'searchbox', 'combobox', 'listbox', 'spinbutton', 'slider'].includes(node.role)) continue;
+        if (node.name) texts.push(node.name); else stack.push(...node.children);
+      }
+      const text = texts.join(' ').trim(); return text && text.length <= 4096 ? [text] : [];
+    });
+    if (messages.length) target.errorMessage = messages.join(' ');
+  }
   const tree: SemanticTree = { schemaVersion: 1, root: normalizedRoot };
   return { ok: true, tree };
 }

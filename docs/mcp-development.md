@@ -275,3 +275,45 @@ when setup creates a candidate. A pending candidate never becomes the selected
 profile through discovery. A running plugin notices selection changes without an
 MCP restart. Old connection IDs, snapshots, Write and session approvals are not
 transferred, and in-flight actions are never replayed on the new instance.
+
+## Exact targeted reads
+
+`read_target_context` shares the full read's capture, authorization, privacy and
+snapshot lifecycle. Input is `connectionId`, `target: {role, name}` or an unnamed
+native field's `target: {role, placeholder}`. Matching is exact and case sensitive
+on sanitized semantics. Neither selectors nor positional/fuzzy matching are
+accepted. An optional `group: {role, name}` must identify one semantic ancestor;
+allowed group roles are form, dialog, alertdialog, group, region and search.
+`context: "group"` requires that group and requests its bounded subtree;
+`context: "target"` is the default.
+
+The ordinary capture envelope gains `target` with `outcome` (found, not-found,
+ambiguous, capture-incomplete, context-unavailable), scope (target, group, none),
+omitted, observation, recovery and an optional reason. Ambiguity returns at most
+five sanitized candidate summaries without refs. Group ambiguity is resolved
+before matching the target. Document boundaries prevent an ancestor in another
+frame from disambiguating a field. Partial captures never assert found or absent.
+
+Target scope contains the target subtree, a semantic group summary and up to four
+local status/alert roots. Accessible supporting text and exposed inline errors
+are sanitized with their owning control. Missing errors do not establish validity;
+use group or full read for dependencies outside the scope. Bounds are 10,000
+sanitized search nodes / 512 KiB, 80 returned nodes, and 16 KiB including the tool
+text envelope and reserved transport metadata, also subject to policy limits.
+Exceeded bounds return an explicit unavailable result and `read_page_context`
+recovery, without silently truncating context or automatically sending the page.
+Maximum compression returns unavailable when reliable semantics are not exposed.
+
+Read mode issues no refs. In Write, each read invalidates old refs and prunes
+adapter addresses to targets actually shown. These refs identify controls but do
+not promise support for every action. The internal capture remains full; this
+feature bounds response size and does not claim faster browser capture.
+
+Custom clicks support named visible div/span elements with exact role=button and
+explicit nonnegative tabindex, excluding editable, disabled, inert, hidden and
+occluded elements. Other custom widgets remain unsupported. Decorative span/SVG
+hits are accepted; independent nested controls are rejected. Both adapters use
+the same fixed eligibility/preflight; Chrome dispatches CDP pointer events and
+Firefox uses programmatic DOM clicks. A short observation window precedes the
+post-click full capture. Applied does not confirm async completion or persistence.
+A lost result can remain outcome-unknown; retries return receipts without replay.

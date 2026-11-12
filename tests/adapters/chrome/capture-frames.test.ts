@@ -376,3 +376,61 @@ it('reports a native known-empty Chrome field without exposing excluded values',
     expect(expressions.some(expression => expression.includes('HTMLInputElement.prototype'))).toBe(allowed);
   }
 });
+
+it.each([
+  ['<div role="button" tabindex="0">Next</div>', true],
+  ['<span role="button" tabindex="0">Next</span>', true],
+  ['<div role="button">Next</div>', false],
+  ['<div role="button" tabindex="-1">Next</div>', false],
+  ['<div role="button" tabindex="0" aria-disabled="true">Next</div>', false],
+  ['<div role="link" tabindex="0">Next</div>', false],
+] as const)('issues Chrome custom-button refs only after the serialized DOM eligibility probe: %s', async (html, eligible) => {
+  const { JSDOM } = await import('jsdom');
+  const { createChromeActionSnapshot } = await import('@/src/adapters/chrome/actions');
+  const dom = new JSDOM(html, { url: 'https://root.test/', pretendToBeVisual: true });
+  const lease = { owner: crypto.randomUUID(), snapshotId: crypto.randomUUID(), expires: Date.now() + 10000 };
+  const snapshot = createChromeActionSnapshot(42, lease);
+  const h = harness({ noFrames: true, rootResponse: { nodes: [
+    { nodeId: 'root', frameId: 'root', role: { value: 'RootWebArea' }, childIds: ['button'] },
+    { nodeId: 'button', backendDOMNodeId: 40, role: { value: 'button' }, name: { value: 'Next' } },
+  ] } }), original = h.client.sendCommand;
+  h.client.sendCommand = (target, method, done, params) => {
+    if (method === 'Runtime.callFunctionOn' && String(params?.functionDeclaration).includes('action: "eligibility"')) {
+      // Execute only the extension-owned serialized probe against the synthetic document.
+      const probe = new Function(`return (${params!.functionDeclaration})`)();
+      done({ result: { value: probe.call(dom.window.document.body.firstElementChild) } });
+    } else original(target, method, done, params);
+  };
+  try {
+    const result = await createFrameCapturer(h.client)(42, undefined, undefined, { actions: lease });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(!!result.tree.root.children[0]!.actionRef).toBe(eligible);
+  } finally { snapshot.dispose(); dom.window.close(); }
+});
+
+it('keeps a verified visible native placeholder distinct from an AX placeholder-name fallback in Read', async () => {
+  const { JSDOM } = await import('jsdom');
+  const dom = new JSDOM('<input placeholder="Public hint">', { url: 'https://root.test/', pretendToBeVisual: true });
+  const input = dom.window.document.querySelector('input')!;
+  const focus = vi.spyOn(input, 'focus');
+  const h = harness({ noFrames: true, rootResponse: { nodes: [
+    { nodeId: 'root', frameId: 'root', role: { value: 'RootWebArea' }, childIds: ['field'] },
+    { nodeId: 'field', backendDOMNodeId: 40, role: { value: 'textbox' }, name: { value: 'Public hint', sources: [{ type: 'placeholder' }] } },
+  ] } }), original = h.client.sendCommand;
+  h.client.sendCommand = (target, method, done, params) => {
+    if (method === 'Runtime.callFunctionOn') {
+      const probe = new Function(`return (${params!.functionDeclaration})`)();
+      done({ result: { value: probe.call(input) } });
+    } else original(target, method, done, params);
+  };
+  try {
+    const result = await createFrameCapturer(h.client)(42);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.tree.root.children[0]).toMatchObject({ role: 'textbox', placeholder: 'Public hint' });
+      expect(result.tree.root.children[0]).not.toHaveProperty('name');
+      expect(result.tree.root.children[0]).not.toHaveProperty('actionRef');
+    }
+    expect(focus).not.toHaveBeenCalled();
+  } finally { dom.window.close(); }
+});

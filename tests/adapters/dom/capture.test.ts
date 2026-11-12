@@ -172,3 +172,15 @@ it('does not read current values or editable descendants when form values are ex
   expect(JSON.stringify(result)).not.toContain('SECRET'); expect(JSON.stringify(result)).not.toContain('checked'); expect(JSON.stringify(result)).not.toContain('selected');
   expect(JSON.stringify(result)).toContain('Account'); expect(JSON.stringify(result)).toContain('Comment');
 });
+
+it('captures visible supporting relationships without promoting hints to names or exposing hidden errors', () => {
+  const doc = documentFor('<label>Display name<input aria-describedby="help" aria-errormessage="error" aria-invalid="true"></label><p id="help">Public name only</p><p id="error">Too short</p><input placeholder="Public hint"><input placeholder="Invisible hint" value="filled"><input aria-describedby="hidden"><p id="hidden" hidden>Hidden supporting text</p>');
+  const all = capture(doc).all;
+  expect(all.find(node => node.name === 'Display name' && node.role === 'textbox')).toMatchObject({ description: 'Public name only', errorMessage: 'Too short' });
+  expect(all.find(node => node.placeholder === 'Public hint')).not.toHaveProperty('name');
+  expect(all.some(node => node.placeholder === 'Invisible hint')).toBe(false);
+  expect(all.some(node => node.description?.includes('Hidden supporting text'))).toBe(false);
+  const excluded = captureDomPage(doc, DOM_CAPTURE_LIMITS, { dataControls: { includeTitle: true, includeFormValues: false, pageUrl: 'omit', linkUrls: 'omit' } });
+  expect(excluded.ok).toBe(true);
+  if (excluded.ok) expect(nodes(excluded.tree.root).some(node => node.description || node.errorMessage)).toBe(false);
+});

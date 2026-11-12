@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Vitalii Shkrobatskyi
 // SPDX-License-Identifier: GPL-3.0-only
+import { validateToolArguments } from '../../helper/src/catalog.mjs';
+import type { TargetReadRequest } from './targeted-read';
 import { browser, type Browser } from 'wxt/browser';
 import { readMcpContext } from './capture';
 import { MCP_SETTINGS_KEY, resolveMcpSettings, saveMcpSettings, automaticMcp, mcpWritesEnabled, maxWriteActions, autoDisconnectMilliseconds, type McpSettings } from './settings';
@@ -102,7 +104,7 @@ export function createMcpController() {
     }, Math.max(1, expires - Date.now()));
   };
   const notifyTools = (clientId: string) => { try { for (const route of routes.values()) route.toolsChanged(clientId); } catch { /* Disconnect invalidates live grants. */ } };
-  const disposeSnapshot = (owner: string) => { const snapshot = snapshots.get(owner); if (snapshot) { snapshot.scopeTree = undefined; snapshot.dispose(); } snapshots.delete(owner); };
+  const disposeSnapshot = (owner: string) => { const snapshot = snapshots.get(owner); snapshots.delete(owner); if (snapshot) { snapshot.scopeTree = undefined; snapshot.dispose(); } };
   const revokeClientAccess = (clientId: string) => {
     clientRegistryRevision++;
     (routes.get('hfs') as HfsTransport | undefined)?.revoke(clientId);
@@ -303,7 +305,7 @@ export function createMcpController() {
       const catalogWrites = request.route === 'hfs'
         ? (effective.snapshot.policy.McpAllowedModes ?? ['read-only', 'read-write']).includes('read-write')
         : writeAllowed && [...grants.values()].some(grant => grant.clientId === request.credentialId && grant.write && grant.expires > Date.now() && grant.revision === effective.revision);
-      return { tools: ['list_shared_tabs', 'resolve_shared_tab', 'get_connection_status', 'read_page_context', ...(catalogWrites ? writeCapabilities : [])] };
+      return { tools: ['list_shared_tabs', 'resolve_shared_tab', 'get_connection_status', 'read_page_context', 'read_target_context', ...(catalogWrites ? writeCapabilities : [])] };
     }
     if (request.request.tool === 'list_shared_tabs' || request.request.tool === 'resolve_shared_tab') {
       if (Object.keys(args).some(key => !['selector', 'tabRef'].includes(key)) || request.request.tool === 'list_shared_tabs' && Object.keys(args).length ||
@@ -333,7 +335,8 @@ export function createMcpController() {
     const batch = request.request.tool === 'write_elements' ? batchArguments(args) : undefined;
     const isWrite = isWriteTool(request.request.tool);
     const action = isWrite && !batch ? actionArguments(request.request.tool, args) : undefined;
-    if (!validId(args.connectionId) || !isWrite && Object.keys(args).some(key => key !== 'connectionId')) throw new Error('invalid-request');
+    const targetRead = request.request.tool === 'read_target_context' ? validateToolArguments('read_target_context', args) as unknown as TargetReadRequest : undefined;
+    if (!validId(args.connectionId) || !targetRead && !isWrite && Object.keys(args).some(key => key !== 'connectionId')) throw new Error('invalid-request');
     const grant = grants.get(args.connectionId);
     const authorize = () => {
       if (ticket !== generation || controller.signal.aborted || !routeLive(request) || !grant || grant.transport !== (request.route ?? 'native') || grant.lease !== request.lease || grants.get(grant.id) !== grant || grant.clientId !== request.credentialId || grant.clientHash !== effective.clientHash ||
@@ -352,16 +355,16 @@ export function createMcpController() {
     const tab = await getMcpTab(grant!.tabId);
     if (!tab.url || new URL(tab.url).origin !== grant!.origin || tab.incognito || tab.discarded || !sourceAllowed(tab.url, effective.controls.sources)) throw new Error('not-connected');
     const mode = grant!.write && writeAllowed ? 'read-write' : 'read-only';
-    const capabilities = ['read_page_context', ...(mode === 'read-write' ? writeCapabilities : [])];
+    const capabilities = ['read_page_context', 'read_target_context', ...(mode === 'read-write' ? writeCapabilities : [])];
     if (request.request.tool === 'get_connection_status') return { connectionId: grant!.id, mode, capabilities, expiresAt: grant!.expires === UNLIMITED_EXPIRY ? null : grant!.expires, busy: !!grant!.busy,
       maxActions: mode === 'read-write' ? maxWriteActions(effective.settings, effective.snapshot.policy) : 0,
       inputMechanism: import.meta.env.BROWSER === 'firefox' ? 'programmatic-dom-events' : 'cdp-pointer-and-native-dom-setters',
-      frameActions: 'accessible-same-origin; transformed or cross-origin frame targets unsupported', customAriaWidgets: false };
-    const capture = async (fillScope?: FillScopeRequest, collectScopeTree = false) => {
+      frameActions: 'accessible-same-origin; transformed or cross-origin frame targets unsupported', customAriaWidgets: false, customButtons: 'named div/span role=button with explicit nonnegative tabindex; programmatic DOM events in Firefox' };
+    const capture = async (fillScope?: FillScopeRequest, collectScopeTree = false, targetRequest?: TargetReadRequest) => {
       disposeSnapshot(grant!.id);
       const result = await readMcpContext(grant!.tabId, authorize, false, controller.signal, undefined, { owner: grant!.id, write: mode === 'read-write', expires: grant!.expires,
         collectScopeTree, responseReserveBytes: collectScopeTree ? 4096 : 0,
-        retain: snapshot => snapshots.set(grant!.id, snapshot) }, fillScope);
+        retain: snapshot => snapshots.set(grant!.id, snapshot) }, fillScope, targetRequest);
       authorize(); return { ...result, connectionId: grant!.id };
     };
     if (batch) {
@@ -408,6 +411,7 @@ export function createMcpController() {
         if (grant!.busy || busyTabs.has(grant!.tabId)) return receipt({ status: 'rejected', error: 'connection-busy' });
         grant!.busy = true; busyTabs.add(grant!.tabId);
         const snapshot = snapshots.get(grant!.id);
+        let actionStarted = false, actionOutcome: ActionOutcome | undefined;
         try {
           if (!snapshot || snapshot.snapshotId !== action.snapshotId || snapshot.expires <= Date.now() || !snapshot.targets.has(action.elementRef)) return receipt({ status: 'rejected', error: 'stale-snapshot' });
           const validate = async () => {
@@ -441,26 +445,32 @@ export function createMcpController() {
             finally { if (temporary) { temporary.scopeTree = undefined; temporary.dispose(); } }
             await validate();
           }
-          const outcome = await snapshot.run(action, controller.signal, validate);
+          actionStarted = true;
+          const outcome = actionOutcome = await snapshot.run(action, controller.signal, validate);
           for (const peer of grants.values()) if (peer.tabId === grant!.tabId) disposeSnapshot(peer.id);
           technicalEvent({ code: 'mcp-write', result: outcome.status === 'applied' ? 'success' : 'error', reason: outcome.status === 'applied' ? 'none' : 'failed' });
           if (outcome.status !== 'applied') return receipt(outcome);
           refreshActivity();
           try {
             const scoped = action.action === 'fill' && action.responseMode === 'scoped';
-            if (scoped) { await waitForFillObservation(controller.signal); await validate(); }
+            if (scoped || action.action === 'click') { await waitForFillObservation(controller.signal); await validate(); }
             const result = await capture(scoped ? { before, elementRef: baselineRef, parentTag: outcome.parentTag } : undefined);
             return { ...receipt(outcome), snapshotId: result.snapshotId, snapshot: result };
           }
           catch { return { ...receipt(outcome), snapshotUnavailable: 'post-action-capture-unavailable' }; }
-        } catch { return receipt({ status: 'rejected', error: controller.signal.aborted ? 'approval-denied' : 'policy-blocked' }); }
+        } catch {
+          if (actionOutcome?.status === 'applied') return { ...receipt(actionOutcome), snapshotUnavailable: 'post-action-capture-unavailable' };
+          if (actionOutcome) return receipt(actionOutcome);
+          return receipt(actionStarted ? { status: 'outcome-unknown', error: 'outcome-unknown' }
+            : { status: 'rejected', error: controller.signal.aborted ? 'approval-denied' : 'policy-blocked' });
+        }
         finally { if (snapshots.get(grant!.id) === snapshot) disposeSnapshot(grant!.id); grant!.busy = false; busyTabs.delete(grant!.tabId); }
       });
     }
-    if (request.request.tool !== 'read_page_context') throw new Error('read-only');
+    if (request.request.tool !== 'read_page_context' && !targetRead) throw new Error('read-only');
     if (grant!.busy || busyTabs.has(grant!.tabId)) throw new Error('connection-busy');
     grant!.busy = true; busyTabs.add(grant!.tabId);
-    try { const result = await capture(); refreshActivity(); technicalEvent({ code: 'mcp-read', result: 'success' }); return result; }
+    try { const result = await capture(undefined, false, targetRead); refreshActivity(); technicalEvent({ code: 'mcp-read', result: 'success' }); return result; }
     finally { grant!.busy = false; busyTabs.delete(grant!.tabId); }
   };
   const scopedId = (kind: TransportKind, lease: string, id: string) => `${kind}:${lease}:${id}`;

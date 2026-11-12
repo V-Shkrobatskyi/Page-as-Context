@@ -8,6 +8,7 @@ const port = Number(values.port);
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Choose a port between 1024 and 65535.');
 const root = new URL('../../tests/manual/mcp-desktop/', import.meta.url);
 const routes = new Map([['/', ['index.html', 'text/html']], ['/frame.html', ['frame.html', 'text/html']],
+  ['/targeted.html', ['targeted.html', 'text/html']], ['/targeted.js', ['targeted.js', 'text/javascript']],
   ['/next.html', ['next.html', 'text/html']], ['/fixture.js', ['fixture.js', 'text/javascript']]]);
 const server = createServer(async (request, response) => {
   // Serve only these public fixture files. Never expose repository or local state.

@@ -1,6 +1,6 @@
 # Privacy policy for Page as Context
 
-Last updated: 2026-11-12. Applies to version 2.2.5.
+Last updated: 2026-11-12. Applies to version 2.2.7.
 
 ## Purpose and local processing
 
@@ -136,3 +136,13 @@ Page as Context uses information obtained through browser permissions only to pr
 Changes to data handling will be reflected in this policy with an updated date. The policy is included in the extension and maintained in the project repository.
 
 For privacy questions, contact [copyascontext@gmail.com](mailto:copyascontext@gmail.com) or visit the [project repository](https://github.com/V-Shkrobatskyi/Page-as-Context). Avoid sharing sensitive exports in public issues.
+
+Targeted MCP reads apply the same privacy/data controls before exact semantic
+matching. Search trees remain operation-local. Bounded responses keep only the
+shown action addresses in Write mode; Read mode returns no action refs. Supporting
+field descriptions and exposed inline errors pass redaction and are omitted when
+form values are excluded. No page search content is added to history or logs.
+
+MCP verifies the actual captured document URL before export and action-ref retention.
+An internal browser error document or a different origin is unavailable under an
+HTTP tab grant, even if the tab URL still reports the attempted HTTP destination.

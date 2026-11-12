@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.2.7 — unreleased
+
+- Align ChatGPT, Claude Desktop/Code, Antigravity and GitHub Copilot app plugin packages at 1.2.7 at the user's request; rebuild distribution packages with the existing helper 0.2.4.
+
+- Reject MCP capture results whose actual document URL is internal, invalid or outside the authorized HTTP tab origin before serializing context or retaining action refs. This covers Chrome's internal error document after a failed HTTP navigation. Dispose the unretained action snapshot on rejection.
+- Discovered during local live native-link acceptance when the synthetic fixture server was unavailable; this fix changes the extension only. Helper remains 0.2.4.
+
+## 2.2.6 — unreleased
+
+- Add `read_target_context` for exact privacy-filtered semantic target search, optional named group context, bounded candidates and explicit incomplete/unavailable results. Every read replaces snapshot refs; only displayed targets remain addressable.
+- Preserve accessible descriptions and exposed inline error relationships through privacy, data controls, compression and both serializers.
+- Support named, visible `div`/`span` custom buttons with `role="button"` and an explicit nonnegative tabindex. Recheck click eligibility after scroll and reject independent nested controls at the hit point.
+- Observe a bounded window after clicks before capturing context. Applied receipts remain applied if post-action capture fails; retries never replay clicks.
+- Update helper to 0.2.4 and desktop plugin sources to 1.2.6 for the shared catalog. Live browser/client acceptance is tracked separately from automated checks.
+
 ## 2.2.5 — unreleased
 
 - Add `write_elements` for explicitly listed native fill/select/checkbox actions, executed sequentially with access/identity checks, stop-on-change behavior, per-step receipts and receipt-only retries. Add Maximum actions per write call (default 10, configurable 1–10) and the optional `McpMaxActions` organization ceiling. Existing single-action tools remain compatible. Development changes; installed clients and release packages are not updated automatically.

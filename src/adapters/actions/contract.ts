@@ -12,6 +12,8 @@ export interface ActionSnapshot {
   expires: number;
   targets: Map<string, IssuedTarget>;
   scopeTree?: SemanticTree;
+  /** Remove adapter addresses omitted by the sanitized response before retention. */
+  retainOnly?: (refs: string[]) => Promise<void>;
   run: (command: ActionCommand, signal: AbortSignal, authorize: () => Promise<void>) => Promise<ActionOutcome>;
   dispose: () => void;
 }

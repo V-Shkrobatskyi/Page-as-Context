@@ -1272,7 +1272,7 @@ it('enforces per-client action restrictions even with cached tool descriptors', 
   const source = await controller.ui({ action: 'source' }, popup);
   const current = await controller.ui({ action: 'connect', sourceId: source.sourceId, clientId: 'synthetic_client_001', allowWrite: true }, page);
   const snapshot = await call('read_page_context', { connectionId: current.connectionId });
-  expect((await call('get_connection_status', { connectionId: current.connectionId })).capabilities).toEqual(['read_page_context']);
+  expect((await call('get_connection_status', { connectionId: current.connectionId })).capabilities).toEqual(['read_page_context', 'read_target_context']);
   expect(await call('click_element', { connectionId: current.connectionId, snapshotId: snapshot.snapshotId, elementRef: '11111111-1111-4111-8111-111111111111', operationId: crypto.randomUUID() })).toEqual({ error: 'read-only' });
   expect(fixture.action).not.toHaveBeenCalled(); expect(fixture.snapshots[0].dispose).toHaveBeenCalled();
   expect(await call('read_page_context', { connectionId: grant.connectionId })).toEqual({ error: 'request-rejected' });
@@ -1390,7 +1390,7 @@ it('keeps HTTP discovery stable across Read and Write while enforcing the curren
   expect((await httpCall('list_shared_tabs')).tabs).toEqual([]);
   await share('read');
   const read = (await httpCall('list_shared_tabs')).tabs[0];
-  expect((await httpCall('get_connection_status', { connectionId: read.connectionId })).capabilities).toEqual(['read_page_context']);
+  expect((await httpCall('get_connection_status', { connectionId: read.connectionId })).capabilities).toEqual(['read_page_context', 'read_target_context']);
   expect((await httpCall('click_element', { connectionId: read.connectionId, snapshotId: crypto.randomUUID(), elementRef: crypto.randomUUID(), operationId: crypto.randomUUID() })).error).toBe('read-only');
   expect(fixture.action).not.toHaveBeenCalled();
   fixture.stored['mcp-settings-v1'] = { ...(fixture.stored['mcp-settings-v1'] as object), mode: 'read-write' };
@@ -1524,4 +1524,63 @@ it.each([['native', undefined], ['hfs', undefined], ['native', 'scoped'], ['hfs'
   fixture.capture.mockImplementationOnce(capture).mockRejectedValueOnce(new Error('unavailable'));
   const applied = await run('fill_element', { ...args, snapshotId: fresh.snapshotId, elementRef: fieldRef, operationId: crypto.randomUUID() });
   expect(applied).toMatchObject({ status: 'applied', snapshotUnavailable: 'post-action-capture-unavailable' });
+});
+
+it.each([['chrome', 'native'], ['firefox', 'native'], ['chrome', 'hfs'], ['firefox', 'hfs']])('finds, acts and rereads on %s/%s without exposing outside refs or replaying clicks', async (browser, route) => {
+  vi.stubEnv('BROWSER', browser);
+  const f = await batchConnection(route, 10, true, 2), connectionId = f.args.connectionId;
+  let refs: string[] = [], count = 0;
+  fixture.capture.mockImplementation(async () => {
+    refs = [crypto.randomUUID(), crypto.randomUUID()];
+    return { ok: true, tree: { schemaVersion: 1, root: { role: 'page', children: [
+      { role: 'form', name: 'Fixture', children: [
+        { role: 'button', name: 'Next', actionRef: refs[0], captureIdentity: 'next', children: [] },
+        { role: 'status', name: `Step ${count}`, children: [] },
+      ] },
+      { role: 'button', name: 'Outside', actionRef: refs[1], children: [] },
+    ] } } };
+  });
+  fixture.action.mockImplementation(async () => { count++; return { status: 'applied' }; });
+  const before = await f.run('read_target_context', { connectionId, target: { role: 'button', name: 'Next' } });
+  expect(before).toMatchObject({ target: { outcome: 'found', scope: 'target' } });
+  expect(before.context).toContain('Next'); expect(before.context).not.toContain('Outside');
+  const retained = fixture.snapshots.at(-1); expect([...retained.targets.keys()]).toEqual([refs[0]]); expect(retained.scopeTree).toBeUndefined();
+  const hidden = await f.run('click_element', { connectionId, snapshotId: before.snapshotId, elementRef: refs[1], operationId: crypto.randomUUID() });
+  expect(hidden).toMatchObject({ status: 'rejected', error: 'stale-snapshot' });
+  // A rejected action consumes the snapshot under the existing single-action contract.
+  const fresh = await f.run('read_target_context', { connectionId, target: { role: 'button', name: 'Next' } });
+  expect(fresh.snapshotId).not.toBe(before.snapshotId); expect(retained.dispose).toHaveBeenCalled();
+  const args = { connectionId, snapshotId: fresh.snapshotId, elementRef: refs[0], operationId: crypto.randomUUID() };
+  expect(await f.run('click_element', args)).toMatchObject({ status: 'applied', snapshot: { context: expect.stringContaining('Step 1') } });
+  expect(await f.run('click_element', args)).not.toHaveProperty('snapshot'); expect(count).toBe(1);
+  const after = await f.run('read_target_context', { connectionId, target: { role: 'button', name: 'Next' }, group: { role: 'form', name: 'Fixture' }, context: 'group' });
+  expect(after.context).toContain('Step 1'); expect(after.target.scope).toBe('group');
+  fixture.capture.mockResolvedValueOnce({ ok: true, tree: { schemaVersion: 1, root: { role: 'page', children: [] } }, warnings: ['frame-unavailable'] });
+  const partial = await f.run('read_target_context', { connectionId, target: { role: 'button', name: 'Next' } });
+  expect(partial).toMatchObject({ partial: true, target: { outcome: 'capture-incomplete' } });
+  expect(fixture.snapshots.at(-1).targets.size).toBe(0);
+});
+
+it.each(['native', 'hfs'])('keeps targeted read available with Read only on %s without action capture or approval', async route => {
+  const run = route === 'hfs' ? httpCall : call;
+  const { connectionId } = route === 'hfs' ? await httpConnect() : await connect();
+  const catalog = await run('list-tools'); expect(catalog.tools).toContain('read_target_context');
+  const result = await run('read_target_context', { connectionId, target: { role: 'button', name: 'Synthetic read result' } });
+  expect(result).toMatchObject({ mode: 'read-only', target: { outcome: 'found' } });
+  expect(fixture.snapshots).toHaveLength(0); expect(fixture.action).not.toHaveBeenCalled();
+  expect(fixture.capture.mock.calls.at(-1)?.[4]).not.toHaveProperty('actions');
+  const invalid = await run('read_target_context', { connectionId, target: { role: 'button', name: 'Synthetic read result', selector: '#x' } });
+  expect(invalid).toHaveProperty('error');
+});
+
+it.each(['adapter-reply-lost', 'cleanup-after-applied'])('preserves click uncertainty and known effects through %s without replay', async failure => {
+  const f = await batchConnection('native', 10, true, 1), connectionId = f.args.connectionId;
+  const snapshot = fixture.snapshots.at(-1), args = { connectionId, snapshotId: f.args.snapshotId, elementRef: f.args.actions[0]!.elementRef, operationId: crypto.randomUUID() };
+  if (failure === 'adapter-reply-lost') fixture.action.mockRejectedValueOnce(new Error('reply lost'));
+  else snapshot.dispose.mockImplementationOnce(() => { throw new Error('cleanup unavailable'); });
+  const result = await f.run('click_element', args);
+  expect(result.status).toBe(failure === 'adapter-reply-lost' ? 'outcome-unknown' : 'applied');
+  expect(await f.run('click_element', args)).toMatchObject({ status: result.status });
+  expect(fixture.action).toHaveBeenCalledTimes(1);
+  expect((await f.run('get_connection_status', { connectionId })).busy).toBe(false);
 });

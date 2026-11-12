@@ -80,3 +80,14 @@ See [HFS setup, trust boundary and verification limits](hfs-integration.md).
 Post-fill scoped responses (2.2.4) compare bounded privacy-filtered semantic state in the current operation memory only; ordinary action snapshots retain node identities/refs without page content. Internal node identities, trees and field values are not written to diagnostics or persistent history. See [capture and export](capture-and-export.md#compact-post-fill-responses-223).
 
 Grouped native writes (2.2.5) keep intermediate sanitized page state only for the current call. The operation ledger retains per-step receipts and a request digest, without submitted values or page context. Retrying an operation ID returns its receipts without repeating the writes.
+
+Targeted reads (2.2.6) match only the sanitized semantic representation and retain
+no search trees in history or diagnostics. Supporting descriptions and exposed
+inline errors pass redaction with the owning field; excluding form values also
+excludes its supporting text. Read-only grants issue no action refs. Write reads
+replace old snapshots and prune addresses for targets omitted by the bounded
+response. Ambiguous, incomplete and unavailable results contain no action refs.
+
+MCP reads (2.2.7) also check the captured document URL before export/ref retention.
+An internal browser error document or a different origin is unavailable even when
+the tab still reports an allowed HTTP URL. Its temporary action snapshot is disposed.

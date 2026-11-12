@@ -56,7 +56,7 @@ try {
     const tools = await session.rpc.mcp.listTools({ serverName });
     assert.ok(tools.tools.some(tool => tool.name === toolName));
     if (values.probe) assert.deepEqual(tools.tools.map(tool => tool.name), ['loader_probe']);
-    else assert.equal(tools.tools.length, 9);
+    else assert.equal(tools.tools.length, 10);
   }
   await session.rpc.tools.initializeAndValidate();
   const metadata = await session.rpc.tools.getCurrentMetadata();
