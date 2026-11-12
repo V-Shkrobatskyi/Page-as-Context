@@ -24,7 +24,7 @@ const routes = Object.fromEntries(Object.entries(models).map(([browser, model]) 
       model.calls.push(request);
       if (!model.connected || model.fail) throw new Error('not-connected');
       if (request.tool === 'list-tools') return { tools: names };
-      if (request.tool === 'read_page_context') return { context: browser, connectionId: request.arguments.connectionId };
+      if (request.tool === 'read_page_context' || request.tool === 'read_target_context') return { context: browser, connectionId: request.arguments.connectionId };
       return { status: 'applied', operationId: request.arguments.operationId };
     },
     onToolsChanged(listener) { model.listeners.add(listener); return () => model.listeners.delete(listener); },
@@ -56,6 +56,7 @@ try {
   const decode = value => JSON.parse(value.content[0].text);
   const connectionId = 'same_connection_00001';
   for (const browser of ['chrome', 'firefox']) assert.equal(decode(await call(`${browser}_read_page_context`, { connectionId })).context, browser);
+  for (const browser of ['chrome', 'firefox']) assert.equal(decode(await call(`${browser}_read_target_context`, { connectionId, target: { role: 'button', name: 'Next' } })).context, browser);
   const otherCalls = models.firefox.calls.length;
   models.chrome.fail = true;
   assert.equal(decode(await call('chrome_read_page_context', { connectionId })).error, 'not-connected');
@@ -83,7 +84,7 @@ try {
     await code.connect(new StdioClientTransport({ command: join(plugin, 'runtime/node'),
       args: [join(plugin, 'server.mjs'), 'chrome', '--client', 'code', '--directory', root, '--manifest-home', join(root, 'home')], stderr: 'pipe' }));
     const tools = (await code.listTools()).tools;
-    assert.equal(tools.length, 9); assert.ok(tools.some(tool => tool.name === 'setup_status'));
+    assert.equal(tools.length, 10); assert.ok(tools.some(tool => tool.name === 'setup_status'));
     assert.ok(tools.every(tool => !tool.name.startsWith('chrome_') && !tool.name.startsWith('firefox_')));
   } finally { await code.close(); }
 } finally { await rm(root, { recursive: true, force: true }); }

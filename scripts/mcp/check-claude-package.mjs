@@ -85,7 +85,7 @@ try {
       assert.match(client.getInstructions(), /supports Chrome and Firefox together/u);
       assert.match(client.getInstructions(), /explicit user approval before confirm_browser_setup/u);
       const initialTools = (await client.listTools()).tools;
-      assert.equal(initialTools.length, 18);
+      assert.equal(initialTools.length, 20);
       assert.ok(initialTools.some(tool => tool.name === 'chrome_setup_status'));
       assert.ok(initialTools.some(tool => tool.name === 'firefox_setup_status'));
       const call = async (name, args = {}) => JSON.parse((await client.callTool({ name: `${browser}_${name}`, arguments: args })).content[0].text);
@@ -118,8 +118,8 @@ try {
         let result = { error: 'request-rejected' };
         if (message.credentialId === credential.credentialId) {
           if (message.request.tool === 'pair') result = approved ? { status: 'approved' } : { status: 'pending', code: 'A1B2C3D4' };
-          else if (message.request.tool === 'list-tools') result = { tools: ['read_page_context'] };
-          else if (approved && message.request.tool === 'read_page_context') result = { context: `Synthetic ${browser} installed-copy context` };
+          else if (message.request.tool === 'list-tools') result = { tools: ['read_page_context', 'read_target_context'] };
+          else if (approved && ['read_page_context', 'read_target_context'].includes(message.request.tool)) result = { context: `Synthetic ${browser} installed-copy context` };
           else if (approved) result = { status: 'rejected', error: 'approval-denied' };
         }
         for (const chunk of resultChunks(message.id, result)) writeFrame(native, chunk);
@@ -139,6 +139,7 @@ try {
       assert.equal((await waitFor('pending')).code, 'A1B2C3D4'); approved = true;
       assert.equal((await waitFor('approved')).code, undefined);
       assert.equal((await call('read_page_context', { connectionId: 'synthetic_connection_001' })).context, `Synthetic ${browser} installed-copy context`);
+      assert.equal((await call('read_target_context', { connectionId: 'synthetic_connection_001', target: { role: 'button', name: 'Next' } })).context, `Synthetic ${browser} installed-copy context`);
       const rejection = await call('click_element', { connectionId: 'synthetic_connection_001', snapshotId: randomUUID(), elementRef: randomUUID(), operationId: randomUUID() });
       assert.equal(rejection.error, 'approval-denied');
       const { profileStore } = await from('helper/src/profile-store.mjs');

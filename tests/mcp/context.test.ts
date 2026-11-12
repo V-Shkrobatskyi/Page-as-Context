@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({ stored: {} as Record<string, unknown>, managed: {} as Record<string, unknown>, capture: vi.fn(), api: {} as any }));
 vi.mock('wxt/browser', () => ({ browser: state.api }));
 vi.mock('@/src/adapters/capture', () => ({ captureActiveTab: state.capture }));
-vi.mock('@/src/adapters/actions/snapshot', () => ({ createActionSnapshot: async (_tabId: number, lease: object) => ({ ...lease, targets: new Map(), dispose: vi.fn() }) }));
+vi.mock('@/src/adapters/actions/snapshot', () => ({ createActionSnapshot: vi.fn(async (_tabId: number, lease: object) => ({ ...lease, targets: new Map(), dispose: vi.fn() })) }));
 import { defaultMcpSettings, resolveMcpSettings, validateMcpSettings, mcpWritesEnabled, maxWriteActions, autoDisconnectMilliseconds } from '@/src/mcp/settings';
 
 it('defaults maxActions to 10, validates 1–10 and respects the organization ceiling', () => {
@@ -16,11 +16,12 @@ it('defaults maxActions to 10, validates 1–10 and respects the organization ce
   for (const McpMaxActions of [0, 11, 1.5, '5']) expect(() => validatePolicy({ McpMaxActions })).toThrow();
 });
 import { readMcpContext } from '@/src/mcp/capture';
+import { createActionSnapshot } from '@/src/adapters/actions/snapshot';
 import { validatePolicy, assertAction } from '@/src/policy/model';
 import { sourceAllowed } from '@/src/policy/sources';
 
 beforeEach(() => {
-  state.stored = {}; state.managed = {}; state.capture.mockReset();
+  state.stored = {}; state.managed = {}; state.capture.mockReset(); vi.mocked(createActionSnapshot).mockClear();
   Object.assign(state.api, { storage: { managed: { get: vi.fn(async () => state.managed) }, local: {
     get: vi.fn(async () => state.stored), set: vi.fn(async (value: object) => Object.assign(state.stored, value)),
   } }, tabs: { get: vi.fn(async () => ({ id: 7, url: 'https://example.test/page' })), query: vi.fn() }, runtime: { sendMessage: vi.fn() } });
@@ -161,4 +162,79 @@ it('does not retain a page tree on an ordinary action snapshot', async () => {
   const retain = vi.fn();
   await readMcpContext(7, () => {}, true, new AbortController().signal, undefined, {owner:'synthetic-owner',expires:Date.now()+60000,write:true,retain});
   expect(retain.mock.calls[0]![0].scopeTree).toBeUndefined();
+});
+
+it('bounds targeted tool envelopes and discards refs on unavailable results', async () => {
+  state.stored['mcp-settings-v1'] = { ...defaultMcpSettings(), mode: 'read-write' };
+  const ref = crypto.randomUUID(), outside = crypto.randomUUID();
+  const retain = vi.fn(), access = { owner: 'targeted-owner', expires: Date.now() + 60000, write: true, retain };
+  const source = (name: string) => ({ schemaVersion: 1, root: { role: 'page', children: [
+    { role: 'textbox', name: 'Notes', value: name, actionRef: ref, children: [] },
+    { role: 'button', name: 'Outside', actionRef: outside, children: [] },
+  ] } });
+  state.capture.mockResolvedValueOnce({ ok: true, tree: source('Small') });
+  const first = await readMcpContext(7, () => {}, true, new AbortController().signal, undefined, access, undefined, { target: { role: 'textbox', name: 'Notes' } });
+  expect(first.target?.outcome).toBe('found'); expect([...retain.mock.calls[0]![0].targets.keys()]).toEqual([ref]);
+  state.capture.mockResolvedValueOnce({ ok: true, tree: source('"'.repeat(10000)) });
+  const large = await readMcpContext(7, () => {}, true, new AbortController().signal, undefined, access, undefined, { target: { role: 'textbox', name: 'Notes' } });
+  expect(large.target).toMatchObject({ outcome: 'context-unavailable', reason: 'target-response-limit' });
+  expect(retain.mock.calls[1]![0].targets.size).toBe(0);
+  expect(new TextEncoder().encode(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify(large) }] })).length).toBeLessThan(16 * 1024);
+  state.stored['popup-settings'] = { compression: 'maximum' };
+  state.capture.mockResolvedValueOnce({ ok: true, tree: source('Small') });
+  const maximum = await readMcpContext(7, () => {}, true, new AbortController().signal, undefined, undefined, undefined, { target: { role: 'textbox', name: 'Notes' } });
+  expect(maximum.target).toMatchObject({ outcome: 'context-unavailable', reason: 'semantic-compression-unavailable' });
+});
+
+it('measures complete synthetic request/response envelopes for targeted and full reads', async () => {
+  const source = { schemaVersion: 1, root: { role: 'page', children: [
+    { role: 'form', name: 'Profile', children: [
+      { role: 'textbox', name: 'Public name', value: 'Example', description: 'Use a public name', children: [] },
+      { role: 'status', name: 'Ready', children: [] },
+    ] },
+    ...Array.from({ length: 100 }, (_, n) => ({ role: 'paragraph', name: `Unrelated page text ${n}`, children: [] })),
+  ] } };
+  const connectionId = 'synthetic_connection_001', signal = new AbortController().signal;
+  const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).length;
+  const response = (payload: unknown) => ({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: JSON.stringify({ ...(payload as object), connectionId }) }] } });
+  const request = (name: string, args: object) => ({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: { connectionId, ...args } } });
+  state.capture.mockResolvedValue({ ok: true, tree: source });
+  const full = await readMcpContext(7, () => {}, true, signal);
+  for (const context of ['target', 'group'] as const) {
+    const query = { target: { role: 'textbox', name: 'Public name' }, group: { role: 'form', name: 'Profile' }, context };
+    const targeted = await readMcpContext(7, () => {}, true, signal, undefined, undefined, undefined, query);
+    expect(targeted.target?.outcome).toBe('found'); expect(targeted.context).not.toContain('Unrelated');
+    expect(bytes(response(targeted))).toBeLessThan(bytes(response(full)));
+    console.info(JSON.stringify({ scenario: context, fullRequestBytes: bytes(request('read_page_context', {})), targetedRequestBytes: bytes(request('read_target_context', query)),
+      fullResponseBytes: bytes(response(full)), targetedResponseBytes: bytes(response(targeted)), callsPerRead: 1, captureWork: 'full in both cases' }));
+  }
+});
+
+it.each(['chrome-error://chromewebdata/', 'about:neterror', 'https://other.test/private', 'invalid-document-url'])(
+  'refuses an actual captured document outside the HTTP tab grant before serialization/ref retention: %s', async sourceUrl => {
+    state.stored['mcp-settings-v1'] = { ...defaultMcpSettings(), enabled: true, mode: 'read-write' };
+    const retain = vi.fn(), ref = crypto.randomUUID();
+    const access = { owner: 'document-boundary-test', expires: Date.now() + 60000, write: true, retain };
+    const payload = { ok: true, tree: { schemaVersion: 1, sourceUrl, root: { role: 'page', children: [
+      { role: 'button', name: 'Unauthorized document action', actionRef: ref, children: [] },
+    ] } } };
+    for (const targeted of [false, true]) {
+      state.capture.mockResolvedValueOnce(payload);
+      await expect(readMcpContext(7, () => {}, false, new AbortController().signal, undefined, access, undefined,
+        targeted ? { target: { role: 'button', name: 'Unauthorized document action' } } : undefined)).rejects.toThrow('captured document is unavailable');
+    }
+    expect(retain).not.toHaveBeenCalled();
+    expect(createActionSnapshot).toHaveBeenCalledTimes(2);
+    for (const call of vi.mocked(createActionSnapshot).mock.results) {
+      const snapshot = await call.value; expect(snapshot.dispose).toHaveBeenCalledTimes(1); expect(snapshot.targets.size).toBe(0);
+    }
+  },
+);
+
+it('accepts the actual same-origin HTTP document and applies page URL exclusion after checking access', async () => {
+  state.stored['mcp-settings-v1'] = { ...defaultMcpSettings(), enabled: true };
+  state.stored['data-controls-v1'] = { includeTitle: true, includeFormValues: true, pageUrl: 'omit', linkUrls: 'omit' };
+  state.capture.mockResolvedValueOnce({ ok: true, tree: { schemaVersion: 1, sourceUrl: 'https://example.test/page', root: { role: 'page', children: [{ role: 'button', name: 'Allowed action', children: [] }] } } });
+  const result = await readMcpContext(7, () => {}, false, new AbortController().signal, undefined, undefined, undefined, { target: { role: 'button', name: 'Allowed action' } });
+  expect(result.target?.outcome).toBe('found'); expect(result.context).not.toContain('https://example.test');
 });

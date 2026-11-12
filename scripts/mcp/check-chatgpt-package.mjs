@@ -82,7 +82,7 @@ try {
   };
   client = await connect();
   assert.equal(client.getServerVersion().version, release.version);
-  assert.equal((await client.listTools()).tools.length, 9);
+  assert.equal((await client.listTools()).tools.length, 10);
   const setupStatus = JSON.parse((await client.callTool({ name: 'setup_status', arguments: {} })).content[0].text);
   assert.equal(setupStatus.nativeInstalled, false);
   assert.equal((await client.callTool({ name: 'read_page_context', arguments: { connectionId: 'synthetic_connection_001' } })).isError, true);
@@ -117,8 +117,9 @@ try {
     if (message.type !== 'request') return;
     let result;
     if (message.request.tool === 'pair') result = pairingApproved ? { status: 'approved' } : { status: 'pending', code: 'A1B2C3D4' };
-    else if (message.request.tool === 'list-tools') result = { tools: ['get_connection_status', 'read_page_context', 'write_elements'] };
+    else if (message.request.tool === 'list-tools') result = { tools: ['get_connection_status', 'read_page_context', 'read_target_context', 'write_elements'] };
     else if (!granted) result = { error: 'request-rejected' };
+    else if (message.request.tool === 'read_target_context') result = { target: { outcome: 'found' }, context: 'Synthetic targeted context' };
     else if (message.request.tool === 'read_page_context') result = { connectionId: 'synthetic_connection_001', context: 'Synthetic installed-package context', warnings: [], partial: false };
     else result = { status: 'rejected', error: 'approval-denied' };
     for (const chunk of resultChunks(message.id, result)) writeFrame(native, chunk);
@@ -141,6 +142,9 @@ try {
   await client.listTools(); granted = true;
   const packageTools = (await from(plugin, 'helper/src/catalog.mjs')).toolCatalog();
   const hasBatch = packageTools.some(tool => tool.name === 'write_elements');
+  assert.ok(packageTools.some(tool => tool.name === 'read_target_context'));
+  const targeted = await client.callTool({ name: 'read_target_context', arguments: { connectionId: 'synthetic_connection_001', target: { role: 'button', name: 'Next' }, group: { role: 'form', name: 'Profile' }, context: 'group' } });
+  assert.equal(JSON.parse(targeted.content[0].text).target.outcome, 'found');
   if (hasBatch) {
     assert.ok((await client.listTools()).tools.some(tool => tool.name === 'write_elements'), 'The packaged server must advertise the grouped write tool.');
     const denied = await client.callTool({ name: 'write_elements', arguments: {

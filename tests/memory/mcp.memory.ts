@@ -50,3 +50,17 @@ it('batch receipt caching releases nested input actions and full page context', 
   };
   await invoke(); expect(await collected(refs)).toBe(true); ledger.clear();
 });
+
+it('targeted projection releases operation-local trees after found, ambiguity, partial and bounds failure', async () => {
+  const { projectTargetRead } = await import('@/src/mcp/targeted-read');
+  const refs: WeakRef<object>[] = [];
+  const read = (mode: string) => {
+    const field = { role: 'textbox', name: 'Public field', children: [] };
+    const tree = { schemaVersion: 1 as const, root: { role: 'page', children: [field, ...(mode === 'ambiguous' ? [{ ...field }] : []),
+      ...(mode === 'large' ? [{ role: 'paragraph', name: 'x'.repeat(600000), children: [] }] : [])] } };
+    const result = projectTargetRead(tree, { target: { role: 'textbox', name: 'Public field' } }, mode === 'partial');
+    refs.push(new WeakRef(tree), new WeakRef(field), new WeakRef(result.tree), new WeakRef(result.info));
+  };
+  for (const mode of ['found', 'ambiguous', 'partial', 'large']) read(mode);
+  expect(await collected(refs)).toBe(true);
+});

@@ -6,10 +6,21 @@ export const MAX_WRITE_ACTIONS = 10;
 export const MAX_BATCH_TEXT = 20000;
 export function toolCatalog() {
   const connectionSchema = { type: 'object', properties: { connectionId: { type: 'string', pattern: '^[a-zA-Z0-9_-]{16,80}$', minLength: 16, maxLength: 80 } }, required: ['connectionId'], additionalProperties: false };
+  const queryText = { type: 'string', minLength: 1, maxLength: 300, pattern: '\\S' };
+  const targetSchema = { type: 'object', additionalProperties: false, required: ['role'], properties: {
+    role: { type: 'string', minLength: 1, maxLength: 80, pattern: '^[a-zA-Z][a-zA-Z0-9-]*$' }, name: queryText, placeholder: queryText,
+  }, oneOf: [{ required: ['name'], not: { required: ['placeholder'] } }, { required: ['placeholder'], properties: { role: { enum: ['textbox', 'searchbox', 'combobox'] } }, not: { required: ['name'] } }] };
   const tools = [
     { name: 'list_shared_tabs', description: 'List only tabs already authorized for this client, with current connection IDs and active-window hints. Does not grant access or reveal unshared tabs.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
     { name: 'resolve_shared_tab', description: 'Resolve an already shared tab by opaque reference, last-focused browser tab, active tabs per window, or the only shared tab. Returns tab-not-shared or ambiguous-tab without granting permissions. Last-focused does not imply OS foreground.', inputSchema: { type: 'object', properties: { selector: { type: 'string', enum: ['only', 'last-focused', 'active-per-window'] }, tabRef: { type: 'string', pattern: '^[a-zA-Z0-9_-]{16,80}$' } }, additionalProperties: false }, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
     { name: 'get_connection_status', description: 'Return the effective mode and capabilities of this authorized connection. Does not enumerate tabs or reveal hidden page metadata.', inputSchema: connectionSchema, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
+    { name: 'read_target_context', description: 'Find an exact sanitized semantic role and name, or an unnamed native field by visible placeholder, and return bounded target context. Optional exact named semantic group and context group read. No selectors, ordinal or fuzzy matching. Ambiguity never selects a candidate. Each read replaces old refs; Read mode returns no action refs. Partial or insufficient context requires read_page_context; omitted errors do not prove validity.',
+      inputSchema: { type: 'object', additionalProperties: false, required: ['connectionId', 'target'], properties: {
+        ...connectionSchema.properties, target: targetSchema,
+        group: { type: 'object', additionalProperties: false, required: ['role', 'name'], properties: { role: { type: 'string', enum: ['form', 'dialog', 'alertdialog', 'group', 'region', 'search'] }, name: queryText } },
+        context: { type: 'string', enum: ['target', 'group'], default: 'target' },
+      }, allOf: [{ if: { properties: { context: { const: 'group' } }, required: ['context'] }, then: { required: ['group'] } }] },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true } },
     { name: 'read_page_context', description: 'Capture the explicitly connected tab using effective privacy filters, data controls, compression and organization policies. Returns sanitized context, capture warnings and a snapshot ID. Omitted information must not be inferred.', inputSchema: connectionSchema, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true } },
   ];
   const idSchema = { type: 'string', pattern: '^[a-zA-Z0-9_-]{16,80}$', minLength: 16, maxLength: 80 };
@@ -42,6 +53,19 @@ export function validateToolArguments(name, raw) {
   if (Object.keys(args).some(key => !Object.hasOwn(schema.properties, key)) || (schema.required ?? []).some(key => !Object.hasOwn(args, key))) throw new Error('invalid-request');
   for (const [key, value] of Object.entries(args)) {
     const field = schema.properties[key];
+    if (name === 'read_target_context' && ['target', 'group'].includes(key)) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('invalid-request');
+      const properties = field.properties;
+      if (Object.keys(value).some(key => !Object.hasOwn(properties, key)) || field.required.some(key => !Object.hasOwn(value, key))) throw new Error('invalid-request');
+      for (const [nestedKey, nestedValue] of Object.entries(value)) {
+        const nested = properties[nestedKey];
+        if (typeof nestedValue !== 'string' || !nestedValue.trim() || nested.maxLength !== undefined && nestedValue.length > nested.maxLength ||
+          nested.pattern && !new RegExp(nested.pattern, 'u').test(nestedValue) || nested.enum && !nested.enum.includes(nestedValue)) throw new Error('invalid-request');
+      }
+      if (key === 'target' && (Object.hasOwn(value, 'name') === Object.hasOwn(value, 'placeholder') ||
+        Object.hasOwn(value, 'placeholder') && !['textbox', 'searchbox', 'combobox'].includes(value.role))) throw new Error('invalid-request');
+      continue;
+    }
     if (name === 'write_elements' && key === 'actions') {
       if (!Array.isArray(value) || !value.length || value.length > MAX_WRITE_ACTIONS) throw new Error('invalid-request');
       const seen = new Set(); let textLength = 0;
@@ -58,9 +82,10 @@ export function validateToolArguments(name, raw) {
       if (textLength > MAX_BATCH_TEXT || new TextEncoder().encode(JSON.stringify(args)).length > 60000) throw new Error('invalid-request');
       continue;
     }
-    if (typeof value !== field.type || field.maxLength !== undefined && value.length > field.maxLength ||
+    if (typeof value !== field.type || field.minLength !== undefined && value.length < field.minLength || field.maxLength !== undefined && value.length > field.maxLength ||
       field.pattern && !new RegExp(field.pattern, 'u').test(value) || field.enum && !field.enum.includes(value)) throw new Error('invalid-request');
   }
+  if (name === 'read_target_context' && args.context === 'group' && !args.group) throw new Error('invalid-request');
   if (name === 'resolve_shared_tab' && args.selector !== undefined && args.tabRef !== undefined) throw new Error('invalid-request');
   return args;
 }
