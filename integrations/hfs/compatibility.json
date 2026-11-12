@@ -5,7 +5,7 @@
   "mcpProtocol": "2025-11-25",
   "sources": {
     "auth.mjs": "03879eb96ce2ce7d908741f972875792ee4efa502de47c97bbaa08e96b526d8a",
-    "relay.mjs": "64d7c9d87bcb84e476c4215cf2b674ffe303af0ac8410ea12cb73359327a2a83"
+    "relay.mjs": "a2b3ed5a080cece7146c8cc5e4aad60ae208d22d2cd9d0f352413a59994c973c"
   },
   "hfsMacArm64ArchiveSha256": "928b4b6e346e3912af295ad09dd1218d1afedfef79a85f3267a60b38964c1312",
   "release": "https://github.com/rejetto/hfs/releases/tag/v3.3.4",

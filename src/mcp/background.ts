@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import { browser, type Browser } from 'wxt/browser';
 import { readMcpContext } from './capture';
-import { MCP_SETTINGS_KEY, resolveMcpSettings, saveMcpSettings, automaticMcp, mcpWritesEnabled, autoDisconnectMilliseconds, type McpSettings } from './settings';
+import { MCP_SETTINGS_KEY, resolveMcpSettings, saveMcpSettings, automaticMcp, mcpWritesEnabled, maxWriteActions, autoDisconnectMilliseconds, type McpSettings } from './settings';
 import { assertAction, redactionMode } from '../policy/model';
 import { hasMcpTransmissionConsent, mcpBrowserPermissions } from './permissions';
 import type { SemanticTree } from '../core/model';
 import { waitForFillObservation, type FillScopeRequest } from './fill-scoped';
-import { OperationLedger, WRITE_TOOLS, actionArguments } from './operations';
+import { OperationLedger, WRITE_TOOLS, actionArguments, batchArguments, isWriteTool, type Receipt } from './operations';
+import { executeBatch } from './batch';
 import { sourceAllowed } from '../policy/sources';
 import type { ActionSnapshot, ActionOutcome } from '../adapters/actions/contract';
 import { technicalEvent } from '../diagnostics/client';
@@ -293,6 +294,8 @@ export function createMcpController() {
     }
     const effective = await authorizeClient(request);
     const allowedWrites = Object.entries(WRITE_TOOLS).filter(([, action]) => (effective.client.actions ?? [...MCP_ACTIONS]).includes(action) && (effective.snapshot.policy.McpAllowedActions ?? ['click', 'fill', 'select-option', 'set-checked']).includes(action)).map(([tool]) => tool);
+    const batchAllowed = allowedWrites.some(tool => tool !== 'click_element');
+    const writeCapabilities = [...allowedWrites, ...(batchAllowed ? ['write_elements'] : [])];
     const writeAllowed = mcpWritesEnabled(effective.settings) && (effective.snapshot.policy.McpAllowedModes ?? ['read-only', 'read-write']).includes('read-write');
     if (request.request.tool === 'list-tools') {
       // HTTP hosts may cache this catalog. Tab modes are execution permissions,
@@ -300,7 +303,7 @@ export function createMcpController() {
       const catalogWrites = request.route === 'hfs'
         ? (effective.snapshot.policy.McpAllowedModes ?? ['read-only', 'read-write']).includes('read-write')
         : writeAllowed && [...grants.values()].some(grant => grant.clientId === request.credentialId && grant.write && grant.expires > Date.now() && grant.revision === effective.revision);
-      return { tools: ['list_shared_tabs', 'resolve_shared_tab', 'get_connection_status', 'read_page_context', ...(catalogWrites ? allowedWrites : [])] };
+      return { tools: ['list_shared_tabs', 'resolve_shared_tab', 'get_connection_status', 'read_page_context', ...(catalogWrites ? writeCapabilities : [])] };
     }
     if (request.request.tool === 'list_shared_tabs' || request.request.tool === 'resolve_shared_tab') {
       if (Object.keys(args).some(key => !['selector', 'tabRef'].includes(key)) || request.request.tool === 'list_shared_tabs' && Object.keys(args).length ||
@@ -327,8 +330,9 @@ export function createMcpController() {
       if (args.selector !== 'active-per-window' && selected.length > 1) return { error: 'ambiguous-tab', tabs: selected };
       return { tabs: selected };
     }
-    const isWrite = Object.hasOwn(WRITE_TOOLS, request.request.tool);
-    const action = isWrite ? actionArguments(request.request.tool, args) : undefined;
+    const batch = request.request.tool === 'write_elements' ? batchArguments(args) : undefined;
+    const isWrite = isWriteTool(request.request.tool);
+    const action = isWrite && !batch ? actionArguments(request.request.tool, args) : undefined;
     if (!validId(args.connectionId) || !isWrite && Object.keys(args).some(key => key !== 'connectionId')) throw new Error('invalid-request');
     const grant = grants.get(args.connectionId);
     const authorize = () => {
@@ -348,16 +352,54 @@ export function createMcpController() {
     const tab = await getMcpTab(grant!.tabId);
     if (!tab.url || new URL(tab.url).origin !== grant!.origin || tab.incognito || tab.discarded || !sourceAllowed(tab.url, effective.controls.sources)) throw new Error('not-connected');
     const mode = grant!.write && writeAllowed ? 'read-write' : 'read-only';
-    const capabilities = ['read_page_context', ...(mode === 'read-write' ? allowedWrites : [])];
+    const capabilities = ['read_page_context', ...(mode === 'read-write' ? writeCapabilities : [])];
     if (request.request.tool === 'get_connection_status') return { connectionId: grant!.id, mode, capabilities, expiresAt: grant!.expires === UNLIMITED_EXPIRY ? null : grant!.expires, busy: !!grant!.busy,
+      maxActions: mode === 'read-write' ? maxWriteActions(effective.settings, effective.snapshot.policy) : 0,
       inputMechanism: import.meta.env.BROWSER === 'firefox' ? 'programmatic-dom-events' : 'cdp-pointer-and-native-dom-setters',
       frameActions: 'accessible-same-origin; transformed or cross-origin frame targets unsupported', customAriaWidgets: false };
-    const capture = async (fillScope?: FillScopeRequest) => {
+    const capture = async (fillScope?: FillScopeRequest, collectScopeTree = false) => {
       disposeSnapshot(grant!.id);
       const result = await readMcpContext(grant!.tabId, authorize, false, controller.signal, undefined, { owner: grant!.id, write: mode === 'read-write', expires: grant!.expires,
+        collectScopeTree, responseReserveBytes: collectScopeTree ? 4096 : 0,
         retain: snapshot => snapshots.set(grant!.id, snapshot) }, fillScope);
       authorize(); return { ...result, connectionId: grant!.id };
     };
+    if (batch) {
+      if (mode !== 'read-write' || !batchAllowed || batch.actions.some(item => !allowedWrites.some(tool => WRITE_TOOLS[tool as keyof typeof WRITE_TOOLS] === item.action))) throw new Error('read-only');
+      assertAction(effective.snapshot.policy, 'mcp-write');
+      const limit = maxWriteActions(effective.settings, effective.snapshot.policy);
+      if (batch.actions.length > limit) return { operationId: batch.operationId, status: 'rejected', error: 'max-actions-exceeded', maxActions: limit, instructions: 'Split the actions into separate calls using fresh snapshots. No actions were started.' };
+      return ledger.execute(grant!.id, batch, async () => {
+        const reject = (error: string): Receipt => ({ operationId: batch.operationId, status: 'rejected', error,
+          actions: batch.actions.map((_, index) => ({ index, status: 'not-started' })) });
+        if (grant!.busy || busyTabs.has(grant!.tabId)) return reject('connection-busy');
+        const initial = snapshots.get(grant!.id);
+        if (!initial || initial.snapshotId !== batch.snapshotId) return reject('stale-snapshot');
+        grant!.busy = true; busyTabs.add(grant!.tabId);
+        const validate = async () => {
+          authorize(); const current = await authorizeClient(request); assertAction(current.snapshot.policy, 'mcp-write');
+          const target = await getMcpTab(grant!.tabId);
+          if (current.revision !== grant!.revision || !mcpWritesEnabled(current.settings) || !target.url || target.incognito || target.discarded ||
+            target.url !== tab.url || new URL(target.url).origin !== grant!.origin || !sourceAllowed(target.url, current.controls.sources)) throw new Error('policy-blocked');
+          authorize();
+        };
+        try {
+          return await executeBatch(batch, initial, { signal: controller.signal, validate,
+            async approve(item, target) {
+              if (grant!.sessionApproval && effective.sessionApprovalAllowed) return 'allowed';
+              return requestApproval(grant!, item.action, `${target.role}${target.name ? ': ' + target.name.slice(0, 1000) : ''}`, controller.signal, tab.windowId);
+            },
+            async capture() {
+              const payload = await capture(undefined, true), snapshot = snapshots.get(grant!.id)!;
+              const tree = snapshot.scopeTree; snapshot.scopeTree = undefined;
+              return { payload, snapshot, tree };
+            },
+            invalidate() { for (const peer of grants.values()) if (peer.tabId === grant!.tabId) disposeSnapshot(peer.id); },
+            applied() { refreshActivity(); technicalEvent({ code: 'mcp-write', result: 'success', reason: 'none' }); },
+          });
+        } finally { grant!.busy = false; busyTabs.delete(grant!.tabId); }
+      });
+    }
     if (action) {
       if (mode !== 'read-write' || !allowedWrites.includes(request.request.tool)) throw new Error('read-only');
       assertAction(effective.snapshot.policy, 'mcp-write');
@@ -429,13 +471,18 @@ export function createMcpController() {
     if (pending.size >= 16 || pending.has(id)) throw new Error('connection-busy');
     const request = { ...raw, id }, controller = new AbortController(), ticket = generation;
     pending.set(id, controller); pendingClients.set(id, request.credentialId);
-    const timeout = setTimeout(() => controller.abort(), Object.hasOwn(WRITE_TOOLS, request.request.tool) ? 85000 : 14000);
+    const timeout = setTimeout(() => controller.abort(), isWriteTool(request.request.tool) ? 85000 : 14000);
     try {
       const result = await execute(request, controller, ticket);
+      // Preserve known per-step outcomes even if access changes just after execution.
+      if (request.request.tool === 'write_elements' && result && 'actions' in result && (ticket !== generation || controller.signal.aborted || !routeLive(request))) {
+        return { operationId: result.operationId, status: result.status, actions: result.actions,
+          ...(result.stopReason ? { stopReason: result.stopReason } : {}), ...(result.error ? { error: result.error } : {}), snapshotUnavailable: 'access-changed' };
+      }
       if (ticket !== generation || controller.signal.aborted || !routeLive(request)) throw new Error('not-connected');
       return result;
     } catch (error) {
-      if (controller.signal.aborted && Object.hasOwn(WRITE_TOOLS, request.request.tool)) return { operationId: request.request.arguments?.operationId, status: 'outcome-unknown', error: 'outcome-unknown' };
+      if (controller.signal.aborted && isWriteTool(request.request.tool)) return { operationId: request.request.arguments?.operationId, status: 'outcome-unknown', error: 'outcome-unknown' };
       const allowed = ['read-only', 'invalid-request', 'operation-id-reused', 'operation-limit', 'connection-busy', 'unsupported-combination', 'response-limit', 'tab-not-shared', 'ambiguous-tab'];
       return { error: error instanceof Error && allowed.includes(error.message) ? error.message : 'request-rejected' };
     } finally { clearTimeout(timeout); pending.delete(id); pendingClients.delete(id); pendingTabs.delete(id); }

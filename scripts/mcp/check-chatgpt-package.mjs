@@ -117,7 +117,7 @@ try {
     if (message.type !== 'request') return;
     let result;
     if (message.request.tool === 'pair') result = pairingApproved ? { status: 'approved' } : { status: 'pending', code: 'A1B2C3D4' };
-    else if (message.request.tool === 'list-tools') result = { tools: ['get_connection_status', 'read_page_context'] };
+    else if (message.request.tool === 'list-tools') result = { tools: ['get_connection_status', 'read_page_context', 'write_elements'] };
     else if (!granted) result = { error: 'request-rejected' };
     else if (message.request.tool === 'read_page_context') result = { connectionId: 'synthetic_connection_001', context: 'Synthetic installed-package context', warnings: [], partial: false };
     else result = { status: 'rejected', error: 'approval-denied' };
@@ -139,6 +139,16 @@ try {
   assert.equal((await waitPairing('approved')).code, undefined);
   // Simulate a separate user tab grant after the pairing transport has closed.
   await client.listTools(); granted = true;
+  const packageTools = (await from(plugin, 'helper/src/catalog.mjs')).toolCatalog();
+  const hasBatch = packageTools.some(tool => tool.name === 'write_elements');
+  if (hasBatch) {
+    assert.ok((await client.listTools()).tools.some(tool => tool.name === 'write_elements'), 'The packaged server must advertise the grouped write tool.');
+    const denied = await client.callTool({ name: 'write_elements', arguments: {
+      connectionId: 'synthetic_connection_001', snapshotId: randomUUID(), operationId: randomUUID(),
+      actions: [{ action: 'fill', elementRef: randomUUID(), text: 'Synthetic package check' }],
+    } });
+    assert.equal(JSON.parse(denied.content[0].text).error, 'approval-denied');
+  }
   const read = value => value.callTool({ name: 'read_page_context', arguments: { connectionId: 'synthetic_connection_001' } });
   assert.equal(JSON.parse((await read(client)).content[0].text).context, 'Synthetic installed-package context');
   second = await connect(); await second.listTools();
@@ -161,7 +171,8 @@ try {
   for (const { path, bytes } of foreignProfiles) assert.deepEqual(await readFile(path), bytes, 'Other client profiles must remain byte-for-byte unchanged.');
   assert.ok((await readdir(state)).includes(clientKind), 'Credentials remain until explicit cleanup.');
   console.log(JSON.stringify({ passed: true, client: clientKind, browser, version: release.version, packageFiles: Object.keys(release.files).length,
-    installedCopy: true, globalNodeRequired: false, setupAppRequired: false, tools: 13, setupStatusWithoutInstallation: true,
+    installedCopy: true, globalNodeRequired: false, setupAppRequired: false, tools: packageTools.length + 5, setupStatusWithoutInstallation: true,
+    groupedWriteDiscovery: hasBatch, groupedWriteDenied: hasBatch,
     explicitSetupConfirmation: true, cleanInstallViaMcp: true, syntheticPairingCodeAndApproval: true, unconfiguredReadRejected: true, syntheticRead: true,
     sharedSessionPreserved: true, instanceSwitchAndCancellation: true, syntheticWriteDenied: true, scopedDisconnect: true, isolatedUninstall: true,
     limitation: 'SDK and synthetic native endpoint only; actual AI-client/plugin browser approval acceptance is separate.' }, null, 2));

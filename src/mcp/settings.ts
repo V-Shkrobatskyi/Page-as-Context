@@ -9,6 +9,7 @@ import { REDACTION_SETTINGS_KEY } from '../redaction-settings';
 import { COMPRESSION_LEVELS } from '../core/contracts';
 import { validateDataControls, type DataControls } from '../core/data-controls';
 import { MCP_MODES, type McpMode } from './policy';
+import { MAX_WRITE_ACTIONS } from '../../helper/src/catalog.mjs';
 
 export const MCP_SETTINGS_KEY = 'mcp-settings-v1';
 export interface McpAutoDisconnect { amount: number; unit: 'minutes' | 'hours' | 'days' | 'unlimited' }
@@ -24,11 +25,13 @@ export interface McpSettings {
   preferences?: ExportPreferences;
   data?: DataControls;
   writeApproval?: 'each-action' | 'session';
+  maxActions?: number;
   autoDisconnect?: McpAutoDisconnect;
 }
 export const defaultMcpSettings = (): McpSettings => ({ version: 1, enabled: false, connection: 'automatic', mode: 'read-only', inherit: true });
 export const automaticMcp = (settings: McpSettings) => settings.connection === 'automatic';
 export const mcpWritesEnabled = (settings: McpSettings) => settings.mode === 'read-write';
+export const maxWriteActions = (settings: McpSettings, policy: { McpMaxActions?: number } = {}) => Math.min(settings.maxActions ?? MAX_WRITE_ACTIONS, policy.McpMaxActions ?? MAX_WRITE_ACTIONS);
 export function autoDisconnectMilliseconds(settings: McpSettings): number {
   const timeout = settings.autoDisconnect ?? defaultAutoDisconnect();
   return timeout.unit === 'unlimited' ? Infinity : timeout.amount * ({ minutes: 60000, hours: 3600000, days: 86400000 }[timeout.unit]);
@@ -37,11 +40,12 @@ export function validateMcpSettings(raw: unknown): McpSettings {
   if (raw === undefined) return defaultMcpSettings();
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new PolicyError('Unable to load MCP settings.');
   const value = raw as McpSettings & { allowPageActions?: boolean };
-  if (Object.keys(raw).some(key => !['nativeEnabled', 'hfs', 'version', 'enabled', 'connection', 'allowPageActions', 'mode', 'inherit', 'preferences', 'data', 'writeApproval', 'autoDisconnect'].includes(key)) || value.version !== 1 ||
+  if (Object.keys(raw).some(key => !['nativeEnabled', 'hfs', 'version', 'enabled', 'connection', 'allowPageActions', 'mode', 'inherit', 'preferences', 'data', 'writeApproval', 'maxActions', 'autoDisconnect'].includes(key)) || value.version !== 1 ||
     value.connection !== undefined && !['automatic', 'manual'].includes(value.connection) ||
     value.allowPageActions !== undefined && typeof value.allowPageActions !== 'boolean' ||
     value.writeApproval !== undefined && !['each-action', 'session'].includes(value.writeApproval) ||
     typeof value.enabled !== 'boolean' || typeof value.inherit !== 'boolean' || !MCP_MODES.includes(value.mode)) throw new PolicyError('Unable to load MCP settings.');
+  if (value.maxActions !== undefined && (!Number.isSafeInteger(value.maxActions) || value.maxActions < 1 || value.maxActions > MAX_WRITE_ACTIONS)) throw new PolicyError('Maximum actions per write call must be an integer from 1 to 10.');
   if (value.nativeEnabled !== undefined && typeof value.nativeEnabled !== 'boolean') throw new PolicyError('Invalid native transport settings.');
   if (value.hfs !== undefined) validateHfsSettings(value.hfs);
   if (value.autoDisconnect !== undefined) {

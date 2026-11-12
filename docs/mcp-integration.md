@@ -6,6 +6,14 @@ not require a terminal, a separately running HFS server or globally installed No
 
 ## Choose your AI app
 
+Development source also provides `write_elements` for a planned list of native
+fill/select/checkbox actions. In MCP Access and approval, **Maximum actions per
+write call** defaults to 10 (range 1–10); the AI chooses the list length, and
+the extension checks each step and stops on errors or page changes. Browser
+approvals remain effective. See [grouped write behavior and limits](capture-and-export.md#grouped-native-writes-development).
+Existing installed plugin packages need a rebuilt helper before this tool is
+advertised; source changes do not update them automatically.
+
 Install the package made for your app; the formats are not interchangeable.
 These guides contain the installation steps, updates and removal instructions:
 

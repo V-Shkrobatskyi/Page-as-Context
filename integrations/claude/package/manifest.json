@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "page-as-context",
   "display_name": "Page as Context",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "Read filtered context and perform explicitly authorized actions in a connected Chrome or Firefox tab.",
   "long_description": "Private macOS Apple silicon desktop extension. Connect Chrome, Firefox or both by asking Claude to set up the browser. Review local setup changes, compare the pairing code and approve in the browser. Grant Read or Write on each tab separately. Includes its Node runtime; no terminal, separate setup app or installation-time browser selection is needed.",
   "author": {

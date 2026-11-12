@@ -36,3 +36,17 @@ it('operation receipts never retain full post-action snapshots or input argument
   };
   await action(); expect(await collected(refs)).toBe(true); ledger.clear();
 });
+
+it('batch receipt caching releases nested input actions and full page context', async () => {
+  const ledger = new OperationLedger(), refs: WeakRef<object>[] = [];
+  const invoke = async () => {
+    const actions = [{ action: 'fill' as const, elementRef: crypto.randomUUID(), text: 'synthetic batch input' }];
+    const args = { action: 'batch' as const, operationId: crypto.randomUUID(), connectionId: crypto.randomUUID(), snapshotId: crypto.randomUUID(), actions };
+    const snapshot = { context: { page: 'synthetic page payload' } };
+    refs.push(new WeakRef(args), new WeakRef(actions), new WeakRef(actions[0]!), new WeakRef(snapshot), new WeakRef(snapshot.context));
+    await ledger.execute('grant', args, async () => ({ operationId: args.operationId, status: 'partial' as const, actions: [
+      { index: 0, status: 'applied' as const }, { index: 1, status: 'not-started' as const },
+    ], snapshot }));
+  };
+  await invoke(); expect(await collected(refs)).toBe(true); ledger.clear();
+});

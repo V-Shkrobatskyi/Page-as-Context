@@ -16,7 +16,7 @@ import { sanitizeActionReferences } from './action-projection';
 export type SupportedExportFormat = Extract<ExportFormat, 'semantic-text' | 'markdown'>;
 
 export interface PreparedExport {
-  actionTargets?: { ref: string; role: string; name?: string; captureIdentity?: string }[];
+  actionTargets?: { ref: string; role: string; name?: string; placeholder?: string; captureIdentity?: string }[];
   serialized: SerializedContext;
   characterCount: number;
   approximateTokenCount: number;
@@ -43,7 +43,7 @@ export function prepareExport(
   const actionTargets: NonNullable<PreparedExport['actionTargets']> = [];
   if (presentation.profile === 'agent-context') {
     const stack = [redaction.tree.root];
-    while (stack.length) { const node = stack.pop()!; if (node.actionRef) actionTargets.push({ ref: node.actionRef, role: node.role, ...(node.name ? { name: node.name } : {}), ...(node.captureIdentity ? { captureIdentity: node.captureIdentity } : {}) }); stack.push(...node.children); }
+    while (stack.length) { const node = stack.pop()!; if (node.actionRef) actionTargets.push({ ref: node.actionRef, role: node.role, ...(node.name ? { name: node.name } : {}), ...(node.placeholder ? { placeholder: node.placeholder } : {}), ...(node.captureIdentity ? { captureIdentity: node.captureIdentity } : {}) }); stack.push(...node.children); }
   }
   const attribution = renderExportAttribution(compressionLevel, redactSensitiveData, redactionSettings);
   const selected = compressionLevel === 'maximum'

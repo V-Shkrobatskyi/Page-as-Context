@@ -236,8 +236,14 @@ all writes. Allowing read-write never automatically grants interaction:
 users must explicitly connect a tab with write access. `McpAllowedActions` limits
 the four native-control operations. Without `McpWriteApproval`, users can choose
 per-action or bounded connection approval; the user default is per-action.
-Set `McpWriteApproval="each-action"` to require approval for every action;
-`session` permits a user's bounded connection approval without forcing it. Stop/Revoke stay available
+Set `McpWriteApproval="each-action"` to require approval for every action,
+including each primitive action inside `write_elements`. `session` permits
+a user's bounded connection approval without forcing it.
+`McpMaxActions` (1–10, default ceiling 10) limits the number of actions per
+grouped write call. The effective limit is the minimum of this ceiling and
+the user's Maximum actions per write call setting. Grouping never bypasses
+`McpAllowedActions`, per-client restrictions or the tab Write grant.
+Stop/Revoke stay available
 when settings are locked. Grant TTL defaults to 30 minutes (maximum policy
 range 1–480); sanitized tool responses default to 4096 KiB (range 64–16384,
 also bounded by transport). `McpAllowedClientIds` contains provisioned credential

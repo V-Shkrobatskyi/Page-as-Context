@@ -1,6 +1,6 @@
 # Privacy policy for Page as Context
 
-Last updated: 2026-11-10. Applies to version 2.2.4.
+Last updated: 2026-11-12. Applies to version 2.2.5.
 
 ## Purpose and local processing
 

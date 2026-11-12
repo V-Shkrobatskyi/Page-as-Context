@@ -160,7 +160,7 @@ export function createRelay(config, cryptoApi = globalThis.crypto) {
     if (overloaded || memory + size + maxResponse > maxMemory) { ctx.status = 429; return; }
     if (sessionId && body.id !== undefined && jobs.some(job => job.clientId === match[2] && job.sessionId === sessionId && job.body.id === body.id)) { ctx.status = 409; return; }
     if (ctx.res.destroyed) { ctx.status = 499; return; }
-    const ticket = auth.random(), deadline = Date.now() + (body.method === 'tools/call' && ['click_element', 'fill_element', 'select_option', 'set_checked'].includes(body.params?.name) ? 95000 : 20000);
+    const ticket = auth.random(), deadline = Date.now() + (body.method === 'tools/call' && ['click_element', 'fill_element', 'select_option', 'set_checked', 'write_elements'].includes(body.params?.name) ? 95000 : 20000);
     const result = await new Promise(resolve => {
       const timer = setTimeout(() => finish(provider, ticket, { status: 504 }, true), deadline - Date.now());
       const onClose = () => finish(provider, ticket, { status: 499 }, true);

@@ -1,6 +1,14 @@
 // Copyright (c) 2026 Vitalii Shkrobatskyi
 // SPDX-License-Identifier: GPL-3.0-only
 import type { ActionCommand, ActionOutcome } from '../adapters/actions/contract';
+import { validateToolArguments } from '../../helper/src/catalog.mjs';
+export type BatchAction = { action: 'fill'; elementRef: string; text: string } | { action: 'select-option'; elementRef: string; optionRef: string } | { action: 'set-checked'; elementRef: string; checked: boolean };
+export interface BatchCommand { action: 'batch'; connectionId: string; snapshotId: string; operationId: string; actions: BatchAction[] }
+export function batchArguments(raw: Record<string, unknown>): BatchCommand {
+  validateToolArguments('write_elements', raw);
+  return { action: 'batch', connectionId: raw.connectionId as string, snapshotId: raw.snapshotId as string, operationId: raw.operationId as string, actions: raw.actions as BatchAction[] };
+}
+export const isWriteTool = (tool: string) => tool === 'write_elements' || Object.hasOwn(WRITE_TOOLS, tool);
 export const WRITE_TOOLS = { click_element: 'click', fill_element: 'fill', select_option: 'select-option', set_checked: 'set-checked' } as const;
 export const validMcpId = (value: unknown): value is string => typeof value === 'string' && /^[a-zA-Z0-9_-]{16,80}$/u.test(value);
 export function actionArguments(tool: string, raw: Record<string, unknown>): ActionCommand & { operationId: string; connectionId: string } {
@@ -16,14 +24,17 @@ export function actionArguments(tool: string, raw: Record<string, unknown>): Act
     ...(action === 'fill' ? { text: raw.text as string, responseMode: (raw.responseMode ?? 'scoped') as 'full' | 'scoped' } : action === 'select-option' ? { optionRef: raw.optionRef as string } : action === 'set-checked' ? { checked: raw.checked as boolean } : {}) };
 }
 
-type Receipt = ActionOutcome & { operationId: string; snapshotId?: string; snapshotUnavailable?: string };
+export interface StepReceipt { index: number; status: ActionOutcome['status'] | 'not-started'; error?: string }
+export interface Receipt { status: ActionOutcome['status'] | 'partial'; operationId: string; error?: string; snapshotId?: string; snapshotUnavailable?: string; actions?: StepReceipt[]; stopReason?: string }
+const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object'
+  ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item)])) : value;
 /** Never evict an operation ID while its grant can still use it. Cache receipts only. */
 export class OperationLedger {
   private entries = new Map<string, { hash: string; receipt: Promise<Receipt> }>();
   clear() { this.entries.clear(); }
   clearGrant(grant: string) { for (const key of this.entries.keys()) if (key.startsWith(grant + ':')) this.entries.delete(key); }
-  async execute<T extends Receipt>(grant: string, args: ActionCommand & { operationId: string }, perform: () => Promise<T>): Promise<T | Receipt> {
-    const encoded = new TextEncoder().encode(JSON.stringify(Object.fromEntries(Object.entries(args).sort(([a], [b]) => a.localeCompare(b)))));
+  async execute<T extends Receipt, A extends { operationId: string }>(grant: string, args: A, perform: () => Promise<T>): Promise<T | Receipt> {
+    const encoded = new TextEncoder().encode(JSON.stringify(canonical(args)));
     const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', encoded)), byte => byte.toString(16).padStart(2, '0')).join('');
     const key = `${grant}:${args.operationId}`, previous = this.entries.get(key);
     if (previous) { if (previous.hash !== hash) throw new Error('operation-id-reused'); return previous.receipt; }
@@ -33,6 +44,8 @@ export class OperationLedger {
     try {
       const result = await perform();
       settle({ operationId: result.operationId, status: result.status, ...(result.error ? { error: result.error } : {}),
+        ...(result.actions ? { actions: result.actions.map(step => ({ index: step.index, status: step.status, ...(step.error ? { error: step.error } : {}) })) } : {}),
+        ...(result.stopReason ? { stopReason: result.stopReason } : {}),
         ...(result.snapshotId ? { snapshotId: result.snapshotId } : {}), ...(result.snapshotUnavailable ? { snapshotUnavailable: result.snapshotUnavailable } : {}) });
       return result;
     } catch {

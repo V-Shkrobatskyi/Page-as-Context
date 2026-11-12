@@ -13,7 +13,7 @@ on 11 November 2026. No Terminal commands or separate setup app are needed.
 2. Click **Browse directory**, then **Add → Upload plugin archive**.
 3. In the **New Plugin** window, click **click to upload**.
 4. Select the file ending in **-plugin.zip** and click **Open**. For example:
-   `Page-as-Context-ChatGPT-1.2.4-macOS-arm64-plugin.zip`.
+   `Page-as-Context-ChatGPT-1.2.5-macOS-arm64-plugin.zip`.
 5. Back in **New Plugin**, click **Add plugin** when the button becomes active.
 6. Wait for processing. In the verified installation this took about one minute,
    then ChatGPT opened **Plugins / Page as Context**.

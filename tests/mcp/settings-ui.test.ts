@@ -3,6 +3,19 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
+it.each([false, true])('loads and saves the write action limit while respecting settings lock=%s', async locked => {
+  fixture.send.mockImplementation(async message => message.action === 'apply' ? { ok: true } : { ...state(true), locked,
+    settings: { ...state(true).settings, mode: 'read-write', maxActions: 4 } });
+  await import('@/entrypoints/mcp/main');
+  const input = document.getElementById('max-actions') as HTMLInputElement;
+  await vi.waitFor(() => expect(input.value).toBe('4')); expect(input.disabled).toBe(locked);
+  if (!locked) {
+    input.value = '2'; input.dispatchEvent(new Event('input', { bubbles: true }));
+    document.getElementById('preferences')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(fixture.send.mock.calls.some(([message]) => message.action === 'apply' && message.settings.maxActions === 2)).toBe(true));
+  }
+});
+
 const fixture = vi.hoisted(() => ({ write: vi.fn(), save: vi.fn(), show: vi.fn(), search: vi.fn(), platform: vi.fn(), permissions: vi.fn(), send: vi.fn(), updated: new Set<() => void>(), removed: new Set<() => void>(), messages: new Set<(message: any, sender: any) => void>() }));
 vi.mock('@/src/save-context', () => ({ downloadBlob: fixture.save }));
 vi.mock('wxt/browser', () => ({ browser: {
