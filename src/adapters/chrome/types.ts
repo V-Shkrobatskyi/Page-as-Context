@@ -6,6 +6,7 @@
  * It stays adapter-local so CDP identifiers and properties cannot leak into the core.
  */
 export interface ChromeAxValue {
+  relatedNodes?: { backendDOMNodeId: number }[];
   sources?: { type?: string; superseded?: boolean }[];
   type?: string;
   value?: string | number | boolean | null;
@@ -14,6 +15,7 @@ export interface ChromeAxValue {
 export interface ChromeAxProperty {
   name: string;
   value?: ChromeAxValue;
+  description?: ChromeAxValue;
 }
 
 export interface ChromeAxNode {
@@ -27,6 +29,7 @@ export interface ChromeAxNode {
   role?: ChromeAxValue;
   name?: ChromeAxValue;
   value?: ChromeAxValue;
+  description?: ChromeAxValue;
   properties?: ChromeAxProperty[];
 }
 

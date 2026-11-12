@@ -16,7 +16,7 @@ export function rememberChromeTarget(lease: ActionLease, raw: ChromeAxNode, node
   const registry = registries.get(lease.snapshotId); if (!registry || registry.size >= 10000) return;
   const ref = crypto.randomUUID(); node.actionRef = ref;
   node.captureIdentity = JSON.stringify([frame.id, frame.loaderId, frame.targetId ?? '', raw.backendDOMNodeId]);
-  registry.set(ref, { backend: raw.backendDOMNodeId, frameId: frame.id, loaderId: frame.loaderId, ...(frame.targetId ? { targetId: frame.targetId } : {}), name: node.name });
+  registry.set(ref, { backend: raw.backendDOMNodeId, frameId: frame.id, loaderId: frame.loaderId, ...(frame.targetId ? { targetId: frame.targetId } : {}), name: normalizeAxName(raw.name) });
 }
 
 export function createChromeActionSnapshot(tabId: number, lease: ActionLease): ActionSnapshot {
@@ -80,7 +80,7 @@ export function createChromeActionSnapshot(tabId: number, lease: ActionLease): A
         if (!hit.alreadyDesired) {
           const verified = await invoke(command.action === 'click' ? 'inspect-click' : 'inspect-checked');
           if (verified.error || verified.x !== hit.x || verified.y !== hit.y) throw new Error('stale-snapshot');
-          await authorize(); if (signal.aborted) throw new Error('cancelled');
+          if (signal.aborted) throw new Error('cancelled');
           dispatched = true;
           await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: hit.x, y: hit.y, button: 'left', clickCount: 1 }, { tabId });
           await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: hit.x, y: hit.y, button: 'left', clickCount: 1 }, { tabId });
@@ -107,6 +107,8 @@ export function createChromeActionSnapshot(tabId: number, lease: ActionLease): A
       if (!attachPending) attached = false;
     }
   };
-  const snapshot: ActionSnapshot = { ...lease, tabId, targets, run, dispose };
+  const snapshot: ActionSnapshot = { ...lease, tabId, targets, run, dispose, async retainOnly(refs) {
+    const shown = new Set(refs); for (const ref of registry.keys()) if (!shown.has(ref)) registry.delete(ref);
+  } };
   return snapshot;
 }

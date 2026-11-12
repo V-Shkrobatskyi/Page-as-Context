@@ -5,12 +5,16 @@
 export function domOperation(this: Element, args: { action: string; text?: string; checked?: boolean; sensitivePattern: string; signature?: string }, option?: Element): Record<string, unknown> {
   const element = this as HTMLInputElement;
   const doc = element.ownerDocument, win = doc.defaultView!;
-  const label = [element.getAttribute('aria-label'), element.getAttribute('name'), element.id, element.getAttribute('autocomplete'), element.getAttribute('placeholder'),
+  const label = [element.getAttribute('aria-label'), element.getAttribute('name'), element.id, element.getAttribute('autocomplete'), element.getAttribute('placeholder'), element.getAttribute('aria-labelledby'),
+    ...(element.getAttribute('aria-labelledby')?.trim().split(/\s+/u).slice(0, 8).map(id => (element.getRootNode() as Document | ShadowRoot).getElementById(id)?.textContent?.slice(0, 2048)) ?? []),
     ...Array.from(element.labels ?? []).slice(0, 8).map(label => label.textContent?.slice(0, 2048))].join(' ').slice(0, 16384);
   const signature = JSON.stringify([element.localName, element.getAttribute('type'), element.getAttribute('role'), label,
-    ['button', 'a', 'option'].includes(element.localName) ? element.textContent?.slice(0, 4096) : '', element.localName === 'option' ? element.getAttribute('value') : '']);
+    (['button', 'a', 'option'].includes(element.localName) || element.getAttribute('role') === 'button') ? element.textContent?.slice(0, 4096) : '', element.localName === 'option' ? element.getAttribute('value') : '']);
   if (args.action === 'signature') return { signature };
-  if (!['input', 'textarea', 'button', 'a', 'select', 'summary'].includes(element.localName)) return { error: 'unsupported-action' };
+  const native = ['input', 'textarea', 'button', 'a', 'select', 'summary', 'option'].includes(element.localName);
+  const customButton = ['div', 'span'].includes(element.localName) && element.getAttribute('role') === 'button' &&
+    element.hasAttribute('tabindex') && element.tabIndex >= 0 && !element.closest('[contenteditable]:not([contenteditable="false"])');
+  if (!native && (!customButton || !['click', 'inspect-click', 'eligibility'].includes(args.action))) return { error: 'unsupported-action' };
   if (element.localName === 'input' && ['password', 'file', 'hidden'].includes(element.type)) return { error: 'unsupported-action' };
   let root = element.getRootNode();
   for (let depth = 0; root instanceof win.ShadowRoot && depth < 16; depth++) {
@@ -19,8 +23,14 @@ export function domOperation(this: Element, args: { action: string; text?: strin
   if (args.signature && args.signature !== signature) return { error: 'stale-snapshot' };
   if (!element.isConnected || element.ownerDocument !== doc || element.closest('[hidden],[inert],[aria-hidden="true"]') ||
     element.matches(':disabled') || element.closest('[aria-disabled="true"]') || element.readOnly) return { error: 'unsupported-action' };
+  let ancestor: Element | null = element;
+  for (let depth = 0; ancestor; depth++) {
+    if (depth > 128 || ancestor.matches('[hidden],[inert],[aria-hidden="true"],[aria-disabled="true"]') || win.getComputedStyle(ancestor).opacity === '0') return { error: 'unsupported-action' };
+    ancestor = ancestor.assignedSlot ?? ancestor.parentElement ?? (ancestor.getRootNode() as ShadowRoot).host ?? null;
+  }
   const style = win.getComputedStyle(element);
   if (style.visibility !== 'visible' || style.display === 'none' || style.opacity === '0') return { error: 'unsupported-action' };
+  if (args.action === 'eligibility') return { eligible: true, customButton };
   if (element.localName === 'option') return { error: 'unsupported-action' };
   element.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
   const rect = element.getBoundingClientRect();
@@ -30,6 +40,21 @@ export function domOperation(this: Element, args: { action: string; text?: strin
   let hit = doc.elementFromPoint(x, y);
   for (let depth = 0; hit?.shadowRoot && depth < 16; depth++) { const deeper = hit.shadowRoot.elementFromPoint(x, y); if (!deeper || deeper === hit) break; hit = deeper; }
   if (!hit || hit !== element && !element.contains(hit)) return { error: 'unsupported-action' };
+  // Decorative text/SVG descendants belong to the button. A nested control
+  // is an independent target and must never receive an ancestor's click.
+  if (args.action === 'click' || args.action === 'inspect-click') {
+    let child: Element | null = hit;
+    while (child && child !== element) {
+      if (child.matches('button,a[href],input,textarea,select,summary,[tabindex],[contenteditable]:not([contenteditable="false"]),[role="button"],[role="link"],[role="checkbox"],[role="radio"],[role="switch"],[role="combobox"],[role="listbox"],[role="menuitem"]')) return { error: 'unsupported-action' };
+      child = child.parentElement ?? (child.getRootNode() as ShadowRoot).host ?? null;
+    }
+    if (domOperation.call(element, { action: 'eligibility', sensitivePattern: args.sensitivePattern }).eligible !== true) return { error: 'stale-snapshot' };
+    const currentStyle = win.getComputedStyle(element);
+    if (!element.isConnected || element.matches(':disabled') || element.closest('[hidden],[inert],[aria-hidden="true"],[aria-disabled="true"]') ||
+      currentStyle.visibility !== 'visible' || currentStyle.display === 'none' || currentStyle.opacity === '0' ||
+      domOperation.call(element, { action: 'signature', sensitivePattern: args.sensitivePattern }).signature !== signature) return { error: 'stale-snapshot' };
+  }
+
   // Verify accessible ancestor frames too. Cross-origin boundaries fail closed.
   let px = x, py = y;
   try {

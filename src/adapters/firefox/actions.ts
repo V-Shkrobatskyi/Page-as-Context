@@ -6,7 +6,7 @@ import { ACTION_ROLES, type ActionCommand, type ActionLease, type ActionOutcome,
 import { domOperation } from '../actions/dom-operation';
 import { ACTION_SENSITIVE_PATTERN } from '../actions/sensitive';
 
-interface WorldCommand { mode: 'locate' | 'apply' | 'release'; lease: ActionLease; command?: ActionCommand; deadline?: number }
+interface WorldCommand { mode: 'locate' | 'apply' | 'release' | 'prune'; lease: ActionLease; command?: ActionCommand; deadline?: number; refs?: string[] }
 interface World { __pageAsContextActions?: (command: WorldCommand) => unknown }
 
 /** Per-document weak registry; only the isolated world can install or call it. */
@@ -21,6 +21,10 @@ export function createDomActionRegistry(doc: Document) {
     const session = sessions.get(value.lease.snapshotId);
     if (!session || session.lease.owner !== value.lease.owner) return { found: false };
     if (value.mode === 'release') { release(value.lease.snapshotId); return { released: true }; }
+    if (value.mode === 'prune') {
+      const shown = new Set(value.refs ?? []); for (const ref of session.nodes.keys()) if (!shown.has(ref)) session.nodes.delete(ref);
+      return { pruned: true };
+    }
     if (session.lease.expires <= Date.now() || session.root.deref() !== doc.documentElement || session.url !== doc.location.href) { release(value.lease.snapshotId); return { found: false }; }
     const command = value.command, entry = command && session.nodes.get(command.elementRef), element = entry?.node.deref();
     if (!command || command.snapshotId !== session.lease.snapshotId || !entry || !element?.isConnected) return { found: false };
@@ -37,6 +41,8 @@ export function createDomActionRegistry(doc: Document) {
     catch { return; }
     if (!ACTION_ROLES.has(node.role) || node.states?.disabled || /^(?:password|file|hidden)$/u.test((element as HTMLInputElement).type ?? '') ||
       new RegExp(ACTION_SENSITIVE_PATTERN, 'iu').test(node.name || node.placeholder || '') || lease.expires <= Date.now()) return;
+    if (domOperation.call(element, { action: 'eligibility', sensitivePattern: ACTION_SENSITIVE_PATTERN }).eligible !== true ||
+      !['input', 'textarea', 'button', 'a', 'select', 'summary', 'option'].includes(element.localName) && !node.name) return;
     let session = sessions.get(lease.snapshotId);
     if (!session) {
       for (const [id, value] of sessions) if (value.lease.owner === lease.owner || value.lease.expires <= Date.now()) release(id);
@@ -91,6 +97,8 @@ export function createFirefoxActionSnapshot(tabId: number, lease: ActionLease): 
       return value;
     } catch { return { status: dispatched ? 'outcome-unknown' : 'rejected', error: dispatched ? 'outcome-unknown' : 'stale-snapshot' }; }
   };
-  const snapshot: ActionSnapshot = { ...lease, tabId, targets, run, dispose };
+  const snapshot: ActionSnapshot = { ...lease, tabId, targets, run, dispose, async retainOnly(refs) {
+    await browser.scripting.executeScript({ target: { tabId, allFrames: true }, world: 'ISOLATED', func: dispatchDomAction, args: [{ mode: 'prune', lease, refs }] });
+  } };
   return snapshot;
 }

@@ -294,3 +294,16 @@ it.each([undefined, '', 'Name', ' '])('normalizes an AX name consistently withou
   expect(result.ok).toBe(true);
   if (result.ok) expect(result.tree.root.children[0]!.name).toBe(name === '' ? undefined : name);
 });
+
+it('preserves accessible supporting text and resolves errors only from exposed document nodes', () => {
+  const result = normalizeChromeAxTree({ nodes: [
+    { nodeId: 'root', role: { value: 'RootWebArea' }, childIds: ['field', 'error', 'ignored'] },
+    { nodeId: 'field', backendDOMNodeId: 1, role: { value: 'textbox' }, name: { value: 'Public name' }, description: { value: 'Public supporting text' }, properties: [
+      { name: 'invalid', value: { value: 'true' } }, { name: 'errormessage', value: { relatedNodes: [{ backendDOMNodeId: 2 }, { backendDOMNodeId: 3 }, { backendDOMNodeId: 999 }] } },
+    ] },
+    { nodeId: 'error', backendDOMNodeId: 2, role: { value: 'StaticText' }, name: { value: 'Too short' } },
+    { nodeId: 'ignored', backendDOMNodeId: 3, ignored: true, role: { value: 'generic' }, name: { value: 'Ignored message' } },
+  ] });
+  expect(result.ok).toBe(true);
+  if (result.ok) expect(result.tree.root.children[0]).toMatchObject({ description: 'Public supporting text', errorMessage: 'Too short' });
+});

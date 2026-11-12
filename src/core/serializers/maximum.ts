@@ -41,7 +41,7 @@ interface Measure { characters: number; cost: number }
 export function serializeMaximum(tree: SemanticTree, format: Format, attribution = renderExportAttribution(), presentation: ExportPresentation = {}): SerializedContext {
   const fallback = () => format === 'semantic-text' ? serializeSemanticText(tree, attribution, presentation) : serializeMarkdown(tree, attribution, presentation);
   const pending = [tree.root];
-  while (pending.length) { const node = pending.pop()!; if (node.actionRef || node.placeholder !== undefined) return fallback(); pending.push(...node.children); }
+  while (pending.length) { const node = pending.pop()!; if (node.actionRef || node.placeholder !== undefined || node.description !== undefined || node.errorMessage !== undefined) return fallback(); pending.push(...node.children); }
   const analysis = analyze(tree.root);
   if (!analysis) return fallback();
   const baseline = format === 'semantic-text' ? measureSemanticTextEncoding(tree, attribution, presentation) : measureMarkdownEncoding(tree, attribution, presentation);

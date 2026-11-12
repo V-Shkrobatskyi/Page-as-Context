@@ -183,9 +183,31 @@ export function captureDomPage(doc: Document, limits: DomCaptureLimits = DOM_CAP
         if (name) output.name = text(clean(name));
         // Expose a hint without inventing an accessible name. Password hints
         // never enter the context, and all other hints pass export privacy.
-        if (!name && element.matches('input,textarea') && !isPassword(element)) {
+        if (!name && element.matches('input,textarea') && !isPassword(element) && (element as HTMLInputElement).value === '') {
           const hint = clean(element.getAttribute('placeholder') ?? '');
           if (hint) output.placeholder = text(hint);
+        }
+        if (!omitValues || !field(element)) {
+          const supportingText = (attribute: string): string => {
+            const scope = element.getRootNode() as Document | ShadowRoot;
+            const ids = clean(element.getAttribute(attribute) ?? '').split(' ').filter(Boolean);
+            if (ids.length > 8) throw new CaptureLimitError();
+            return clean(ids.map(id => {
+              const ref = scope.getElementById(id);
+              if (!ref) return '';
+              // Related text must be present in the visible capture, too.
+              let current: Element | null = ref;
+              while (current) {
+                if (pruned(current) || style(current).visibility !== 'visible') return '';
+                current = current.parentElement ?? (current.getRootNode() as ShadowRoot).host ?? null;
+              }
+              return textAlternative(ref, false);
+            }).join(' '));
+          };
+          const description = supportingText('aria-describedby') || clean(element.getAttribute('aria-description') ?? '');
+          const errorMessage = element.getAttribute('aria-invalid') === 'true' ? supportingText('aria-errormessage') : '';
+          if (description) output.description = text(description);
+          if (errorMessage) output.errorMessage = text(errorMessage);
         }
         if (omitValues && editable(element)) output.editable = true;
         const states = elementStates(element, role, !omitValues);

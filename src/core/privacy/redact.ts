@@ -216,6 +216,8 @@ export function redactSemanticTree(tree: SemanticTree, settings: RedactionSettin
     if (node.captureIdentity !== undefined) result.captureIdentity = node.captureIdentity;
     if (node.name !== undefined) result.name = insideSensitiveField ? redactFieldText(node.name) : redactText(node.name, insidePhoneField, insideMaskedField);
     if (node.placeholder !== undefined) result.placeholder = insideSensitiveField ? redactFieldText(node.placeholder) : redactText(node.placeholder, insidePhoneField, insideMaskedField);
+    if (node.description !== undefined) result.description = sensitiveField || insideSensitiveField ? redactFieldText(node.description) : redactText(node.description, phoneField, fieldMask);
+    if (node.errorMessage !== undefined) result.errorMessage = sensitiveField || insideSensitiveField ? redactFieldText(node.errorMessage) : redactText(node.errorMessage, phoneField, fieldMask);
     if (node.value !== undefined) {
       if (sensitiveField || insideSensitiveField) {
         result.value = redactFieldText(node.value);

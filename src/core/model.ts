@@ -27,6 +27,9 @@ export interface SemanticNode {
   /** Visible input hint, distinct from the computed accessible name. */
   placeholder?: string;
   value?: string;
+  /** Accessible supporting text, sanitized with the owning control. */
+  description?: string;
+  errorMessage?: string;
   level?: number;
   href?: string;
   states?: NodeStates;
