@@ -40,7 +40,7 @@ export async function bridgeClient(config, credential) {
       if (pending.size >= 4 || socket.destroyed) return Promise.reject(new Error('not-connected'));
       const id = randomUUID();
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => { pending.delete(id); socket.destroy(); reject(new Error('capture-timeout')); }, ['click_element', 'fill_element', 'select_option', 'set_checked'].includes(request.tool) ? 91000 : 16000);
+        const timer = setTimeout(() => { pending.delete(id); socket.destroy(); reject(new Error('capture-timeout')); }, ['click_element', 'fill_element', 'select_option', 'set_checked', 'write_elements'].includes(request.tool) ? 91000 : 16000);
         pending.set(id, { resolve, reject, timer, assembly: createAssembly() });
         try { writeFrame(socket, { type: 'request', id, request }); } catch { socket.destroy(); }
       });

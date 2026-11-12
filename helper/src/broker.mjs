@@ -79,7 +79,7 @@ export async function startBroker(config, { requestTimeout = 15_000, idleTimeout
         const job = { client: socket, native, clientId: message.id, assembly: createAssembly(), timer: setTimeout(() => {
           try { writeFrame(native, { type: 'cancel', id }); } catch { native.destroy(); }
           failRequest(id, 'capture-timeout');
-        }, ['click_element', 'fill_element', 'select_option', 'set_checked'].includes(message.request.tool) ? Math.max(requestTimeout, 90000) : requestTimeout) };
+        }, ['click_element', 'fill_element', 'select_option', 'set_checked', 'write_elements'].includes(message.request.tool) ? Math.max(requestTimeout, 90000) : requestTimeout) };
         pending.set(id, job);
         writeFrame(native, { type: 'request', id, credentialId: hello.credentialId, credentialSecret: hello.secret,
           instanceId: hello.instanceId, browser: hello.browser, request: message.request });

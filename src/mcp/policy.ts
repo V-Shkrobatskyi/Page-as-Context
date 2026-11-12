@@ -22,6 +22,7 @@ export interface McpPolicy {
   McpWriteApproval?: 'each-action' | 'session';
   McpMaxSessionMinutes?: number;
   McpMaxResponseKiB?: number;
+  McpMaxActions?: number;
 }
 
 /** MCP configuration failures must not silently become permissive defaults. */
@@ -43,7 +44,7 @@ export function validateMcpPolicy(raw: Record<string, unknown>, invalid: (key: s
     Object.assign(result, { [key]: raw[key] });
   }
   if (result.McpDefaultMode && !(result.McpAllowedModes ?? MCP_MODES).includes(result.McpDefaultMode)) invalid('McpDefaultMode');
-  for (const [key, min, max] of [['McpMaxSessionMinutes', 1, 480], ['McpMaxResponseKiB', 64, 16384]] as const) {
+  for (const [key, min, max] of [['McpMaxSessionMinutes', 1, 480], ['McpMaxResponseKiB', 64, 16384], ['McpMaxActions', 1, 10]] as const) {
     if (raw[key] === undefined) continue;
     if (!Number.isSafeInteger(raw[key]) || Number(raw[key]) < min || Number(raw[key]) > max) invalid(key);
     result[key] = raw[key] as number;

@@ -12,7 +12,7 @@ import { createActionSnapshot } from '../adapters/actions/snapshot';
 import type { ActionSnapshot } from '../adapters/actions/contract';
 import type { CompressionLevel } from '../core/contracts';
 
-export interface CaptureAccess { owner: string; expires: number; write: boolean; collectScopeTree?: boolean; retain: (snapshot: ActionSnapshot) => void }
+export interface CaptureAccess { owner: string; expires: number; write: boolean; collectScopeTree?: boolean; responseReserveBytes?: number; retain: (snapshot: ActionSnapshot) => void }
 
 /** Both local preview and external reads use this explicitly targeted handler. */
 export async function readMcpContext(tabId: number, authorize: () => void, preview: boolean, signal: AbortSignal, draft?: McpSettings, access?: CaptureAccess, fillScope?: FillScopeRequest) {
@@ -71,7 +71,7 @@ export async function readMcpContext(tabId: number, authorize: () => void, previ
     ...(scope ? { scope } : {}), warnings: [...(result.warnings ?? []), ...warnings], context: output.serialized.content };
   // Count the actual textual tool envelope, including JSON escaping. Reserve
   // bounded space for connectionId and the outer JSON-RPC response metadata.
-  const toolBytes = new TextEncoder().encode(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify(payload) }] })).length + 512;
+  const toolBytes = new TextEncoder().encode(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify(payload) }] })).length + 512 + (access?.responseReserveBytes ?? 0);
   if (toolBytes > Math.min(4096, effective.snapshot.policy.McpMaxResponseKiB ?? 4096) * 1024) throw new Error('response-limit');
   authorize();
   if (actionSnapshot && access) { access.retain(actionSnapshot); retained = true; }

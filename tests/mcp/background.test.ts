@@ -98,7 +98,7 @@ async function call(tool: string, args: Record<string, unknown> = {}, secret = '
   const id = crypto.randomUUID();
   const state = await controller.ui({ action: 'read' }, page);
   port.onMessage.emit({ type: 'request', id, instanceId: state.instanceId, browser: import.meta.env.BROWSER, credentialId: clientId, credentialSecret: secret, request: { tool, arguments: args } });
-  await vi.waitFor(() => expect(port.postMessage.mock.calls.some(([value]: any) => value.type === 'result-chunk' && value.id === id)).toBe(true));
+  await vi.waitFor(() => expect(port.postMessage.mock.calls.some(([value]: any) => value.type === 'result-chunk' && value.id === id)).toBe(true), { timeout: 5000 });
   const chunks = port.postMessage.mock.calls.map(([value]: any) => value).filter((value: any) => value.id === id).sort((a: any, b: any) => a.index - b.index);
   return JSON.parse(Buffer.concat(chunks.map((chunk: any) => Buffer.from(chunk.data, 'base64'))).toString());
 }
@@ -1136,8 +1136,114 @@ async function httpConnect(write = false) {
 }
 async function httpCall(tool: string, args: Record<string, unknown> = {}) {
   const state = await controller.ui({ action: 'read' }, page);
-  return fixture.http.events.request({ type: 'request', id: crypto.randomUUID(), instanceId: state.instanceId, browser: 'chrome', credentialId: 'http_client_00000001', credentialSecret: 'b'.repeat(43), route: 'hfs', lease: fixture.http.route.lease, request: { tool, arguments: args } });
+  return fixture.http.events.request({ type: 'request', id: crypto.randomUUID(), instanceId: state.instanceId, browser: import.meta.env.BROWSER, credentialId: 'http_client_00000001', credentialSecret: 'b'.repeat(43), route: 'hfs', lease: fixture.http.route.lease, request: { tool, arguments: args } });
 }
+
+async function batchConnection(route = 'native', maxActions = 10, skip = true, count = 3) {
+  fixture.api.permissions.getAll.mockResolvedValue({ data_collection: ['websiteContent', 'browsingActivity', 'personalCommunications', 'websiteActivity'] });
+  await automaticClient();
+  fixture.stored['mcp-settings-v1'] = { ...(fixture.stored['mcp-settings-v1'] as object), maxActions };
+  if (route === 'hfs') { enableHttpSettings(); await controller.ui({ action: 'start' }, page); await controller.ui({ action: 'hfs-export-client', clientId: 'http_client_00000001' }, page); }
+  await share('write');
+  const run = route === 'hfs' ? httpCall : call, { connectionId } = (await run('list_shared_tabs')).tabs[0];
+  const tab = (await controller.ui({ action: 'read' }, page)).sharedTabs![0]!;
+  if (skip) await controller.ui({ action: 'connection-approval', tabRef: tab.tabRef, connectionId, skip: true }, page);
+  const values = Array<string>(count).fill(''); let refs: string[] = [];
+  fixture.capture.mockImplementation(async () => {
+    refs = values.map(() => crypto.randomUUID());
+    return { ok: true, tree: { schemaVersion: 1, sourceUrl: 'https://example.test/', root: { role: 'page', children: values.map((value, index) => ({ role: 'textbox', name: `Field ${index}`, value, actionRef: refs[index], captureIdentity: `identity-${index}`, children: [] })) } } };
+  });
+  fixture.action.mockImplementation(async command => { const index = refs.indexOf(command.elementRef); expect(index).toBeGreaterThanOrEqual(0); values[index] = command.text; return { status: 'applied', parentTag: 'label' }; });
+  const snapshot = await run('read_page_context', { connectionId });
+  return { run, values, args: { connectionId, snapshotId: snapshot.snapshotId, operationId: crypto.randomUUID(), actions: refs.map((elementRef, index) => ({ action: 'fill', elementRef, text: `Synthetic value ${index}` })) } };
+}
+it.each([['chrome', 'native'], ['firefox', 'native'], ['chrome', 'hfs'], ['firefox', 'hfs']])('executes batch through the %s/%s controller with fresh refs and receipt-only retries', async (browser, route) => {
+  vi.stubEnv('BROWSER', browser); const f = await batchConnection(route);
+  expect((await f.run('get_connection_status', { connectionId: f.args.connectionId })).maxActions).toBe(10);
+  expect((await f.run('list-tools')).tools).toContain('write_elements');
+  const result = await f.run('write_elements', f.args);
+  expect(result.status).toBe('applied'); expect(result.actions.map((step: any) => step.status)).toEqual(['applied', 'applied', 'applied']);
+  expect(result.snapshot.context).toContain('Field 0'); expect(result.snapshot.context).toContain('Field 2'); expect(result.snapshot).not.toHaveProperty('scope');
+  expect(f.values).toEqual(f.args.actions.map(item => item.text)); expect(fixture.action).toHaveBeenCalledTimes(3);
+  expect(fixture.action.mock.calls[0]![0].elementRef).not.toBe(f.args.actions[0]!.elementRef);
+  expect(fixture.snapshots.every(snapshot => snapshot.scopeTree === undefined)).toBe(true);
+  const retry = await f.run('write_elements', f.args); expect(retry.actions).toEqual(result.actions); expect(retry).not.toHaveProperty('snapshot'); expect(fixture.action).toHaveBeenCalledTimes(3);
+  expect((await f.run('write_elements', { ...f.args, operationId: crypto.randomUUID() })).error).toBe('stale-snapshot');
+});
+it.each([['chrome', 'native'], ['firefox', 'native'], ['chrome', 'hfs'], ['firefox', 'hfs']])('executes ten distinct fields through the %s/%s controller', async (browser, route) => {
+  vi.stubEnv('BROWSER', browser);
+  const f = await batchConnection(route, 10, true, 10);
+  const result = await f.run('write_elements', f.args);
+  expect(result.status).toBe('applied');
+  expect(result.actions.map((step: any) => step.status)).toEqual(Array(10).fill('applied'));
+  expect(f.values).toEqual(f.args.actions.map(item => item.text));
+  expect(fixture.action).toHaveBeenCalledTimes(10);
+  const retry = await f.run('write_elements', f.args);
+  expect(retry.actions).toEqual(result.actions); expect(retry).not.toHaveProperty('snapshot');
+  expect(fixture.action).toHaveBeenCalledTimes(10);
+});
+it.each(['native', 'hfs'])('keeps a batch alive across two 35-second approvals on %s', async route => {
+  const f = await batchConnection(route, 10, false);
+  vi.useFakeTimers();
+  const pending = f.run('write_elements', { ...f.args, actions: f.args.actions.slice(0, 2) });
+  const prompts = () => fixture.api.tabs.create.mock.calls.filter(([details]: any[]) => details.url.includes('/mcp-approval.html#'));
+  for (let index = 0; index < 2; index++) {
+    await vi.waitFor(() => expect(prompts()).toHaveLength(index + 1));
+    await vi.advanceTimersByTimeAsync(35000);
+    expect(fixture.action).toHaveBeenCalledTimes(index);
+    await controller.ui({ action: 'approval-answer', allow: true }, { id: 'extension', url: prompts()[index][0].url, tab: { id: 9 } } as Browser.runtime.MessageSender);
+  }
+  let completed = false; void pending.then(() => { completed = true; });
+  await vi.waitFor(() => expect(completed).toBe(true), { timeout: 2000 });
+  const result = await pending;
+  expect(result.status).toBe('applied'); expect(fixture.action).toHaveBeenCalledTimes(2);
+  expect(f.values).toEqual(['Synthetic value 0', 'Synthetic value 1', '']);
+});
+it.each(['native', 'hfs'])('expires the first batch approval on %s without writes or replay', async route => {
+  const f = await batchConnection(route, 10, false);
+  vi.useFakeTimers();
+  const pending = f.run('write_elements', f.args);
+  const prompts = () => fixture.api.tabs.create.mock.calls.filter(([details]: any[]) => details.url.includes('/mcp-approval.html#'));
+  await vi.waitFor(() => expect(prompts()).toHaveLength(1));
+  await vi.advanceTimersByTimeAsync(45001);
+  const result = await pending;
+  expect(result).toMatchObject({ status: 'rejected', stopReason: 'approval-timeout' });
+  expect(fixture.action).not.toHaveBeenCalled(); expect(f.values).toEqual(['', '', '']);
+  const retry = await f.run('write_elements', f.args);
+  expect(retry.actions).toEqual(result.actions); expect(retry).not.toHaveProperty('snapshot');
+  expect(prompts()).toHaveLength(1); expect(fixture.action).not.toHaveBeenCalled();
+});
+it.each([1, 2])('rejects lists above maxActions=%s before capture or dispatch', async limit => {
+  const f = await batchConnection('native', limit), captures = fixture.capture.mock.calls.length;
+  expect(await f.run('write_elements', f.args)).toMatchObject({ status: 'rejected', error: 'max-actions-exceeded', maxActions: limit });
+  expect(fixture.action).not.toHaveBeenCalled(); expect(fixture.capture).toHaveBeenCalledTimes(captures);
+  expect((await f.run('write_elements', { ...f.args, actions: f.args.actions.slice(0, 1) })).status).toBe('applied');
+});
+it('applies the organization ceiling and rejects disallowed action types before any write', async () => {
+  fixture.api.storage.managed.get.mockResolvedValue({ McpMaxActions: 2, McpAllowedActions: ['fill'] });
+  const f = await batchConnection();
+  expect((await f.run('get_connection_status', { connectionId: f.args.connectionId })).maxActions).toBe(2);
+  expect((await f.run('write_elements', f.args)).error).toBe('max-actions-exceeded');
+  expect((await f.run('write_elements', { ...f.args, actions: [{ action: 'set-checked', elementRef: f.args.actions[0]!.elementRef, checked: true }] })).error).toBe('read-only');
+  expect(fixture.action).not.toHaveBeenCalled();
+});
+it.each(['dependency', 'revoke'])('stops the controller batch after %s and preserves outcomes', async kind => {
+  const f = await batchConnection(), apply = fixture.action.getMockImplementation()!;
+  fixture.action.mockImplementation(async command => { const outcome = await apply(command); if (kind === 'revoke') await share('off'); else f.values[2] = 'dependency'; return outcome; });
+  const result = await f.run('write_elements', f.args);
+  expect(result.status).toBe('partial'); expect(result.actions.map((step: any) => step.status)).toEqual(['applied', 'not-started', 'not-started']); expect(fixture.action).toHaveBeenCalledTimes(1);
+  if (kind === 'revoke') expect(result).not.toHaveProperty('snapshot'); else expect(result.snapshot.context).toContain('dependency');
+});
+it('retains per-action approval and stops when the second action is denied', async () => {
+  const f = await batchConnection('native', 10, false), pending = f.run('write_elements', f.args);
+  const prompts = () => fixture.api.tabs.create.mock.calls.filter(([details]: any[]) => details.url.includes('/mcp-approval.html#'));
+  await vi.waitFor(() => expect(prompts()).toHaveLength(1)); expect(fixture.action).not.toHaveBeenCalled();
+  await controller.ui({ action: 'approval-answer', allow: true }, { id: 'extension', url: prompts()[0][0].url, tab: { id: 9 } } as Browser.runtime.MessageSender);
+  await vi.waitFor(() => expect(prompts()).toHaveLength(2));
+  await controller.ui({ action: 'approval-answer', allow: false }, { id: 'extension', url: prompts()[1][0].url, tab: { id: 9 } } as Browser.runtime.MessageSender);
+  const result = await pending;
+  expect(result.status).toBe('partial'); expect(result.actions.map((step: any) => step.status)).toEqual(['applied', 'rejected', 'not-started']); expect(fixture.action).toHaveBeenCalledTimes(1);
+});
 it('keeps real capture authorization shared while isolating native and HTTP route loss', async () => {
   enableHttpSettings(); const native = await connect(); const http = await httpConnect();
   expect((await httpCall('read_page_context', { connectionId: http.connectionId })).context).toContain('Synthetic read result');

@@ -4,7 +4,7 @@ import type { SemanticTree } from '../../core/model';
 export type ActionCommand = { action: 'click' | 'fill' | 'select-option' | 'set-checked'; snapshotId: string; elementRef: string; text?: string; responseMode?: 'full' | 'scoped'; checked?: boolean; optionRef?: string };
 export type ActionOutcome = { status: 'applied' | 'rejected' | 'outcome-unknown'; error?: string; parentTag?: string };
 export interface ActionLease { owner: string; snapshotId: string; expires: number }
-export interface IssuedTarget { ref: string; role: string; name?: string; captureIdentity?: string }
+export interface IssuedTarget { ref: string; role: string; name?: string; placeholder?: string; captureIdentity?: string }
 export interface ActionSnapshot {
   snapshotId: string;
   owner: string;

@@ -129,6 +129,15 @@ it('expires dispatched work, rejects late reply and sends a scoped cancel withou
   const events = (await f.provider('poll', {}, lease)).body.events;
   expect(events).toEqual([{ type: 'cancel', ticket: command.ticket }]);
 });
+it('gives grouped writes the 95-second relay deadline instead of the read timeout', async () => {
+  vi.useFakeTimers(); const f = fixture(), lease = await f.register();
+  const response = f.consumer({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'write_elements', arguments: {} } }, 'session_000000000001');
+  const command = (await f.provider('poll', {}, lease)).body.events[0];
+  expect(command.deadline - Date.now()).toBe(95000);
+  await vi.advanceTimersByTimeAsync(20001);
+  expect((await f.provider('reply', { ticket: command.ticket, status: 200, body: { jsonrpc: '2.0', id: 1, result: {} } }, lease)).status).toBe(200);
+  expect((await response).status).toBe(200);
+});
 it('bounds request bodies and rejects replayed provider MACs', async () => {
   const f = fixture(), lease = await f.register();
   expect((await f.consumer({ value: 'x'.repeat(65536) })).status).toBe(413);

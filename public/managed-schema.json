@@ -395,6 +395,12 @@
       "minimum": 1,
       "maximum": 480
     },
+    "McpMaxActions": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10,
+      "description": "Maximum number of explicitly listed actions per write_elements call."
+    },
     "McpMaxResponseKiB": {
       "type": "integer",
       "minimum": 64,

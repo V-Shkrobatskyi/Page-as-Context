@@ -5,7 +5,16 @@ const state = vi.hoisted(() => ({ stored: {} as Record<string, unknown>, managed
 vi.mock('wxt/browser', () => ({ browser: state.api }));
 vi.mock('@/src/adapters/capture', () => ({ captureActiveTab: state.capture }));
 vi.mock('@/src/adapters/actions/snapshot', () => ({ createActionSnapshot: async (_tabId: number, lease: object) => ({ ...lease, targets: new Map(), dispose: vi.fn() }) }));
-import { defaultMcpSettings, resolveMcpSettings, validateMcpSettings, mcpWritesEnabled, autoDisconnectMilliseconds } from '@/src/mcp/settings';
+import { defaultMcpSettings, resolveMcpSettings, validateMcpSettings, mcpWritesEnabled, maxWriteActions, autoDisconnectMilliseconds } from '@/src/mcp/settings';
+
+it('defaults maxActions to 10, validates 1–10 and respects the organization ceiling', () => {
+  expect(maxWriteActions(defaultMcpSettings())).toBe(10);
+  expect(maxWriteActions(validateMcpSettings({ ...defaultMcpSettings(), maxActions: 5 }), { McpMaxActions: 2 })).toBe(2);
+  expect(maxWriteActions(validateMcpSettings({ ...defaultMcpSettings(), maxActions: 1 }))).toBe(1);
+  for (const maxActions of [null, 0, -1, 11, 1.5, '5', false]) expect(() => validateMcpSettings({ ...defaultMcpSettings(), maxActions })).toThrow();
+  expect(validatePolicy({ McpMaxActions: 3 })).toMatchObject({ McpMaxActions: 3 });
+  for (const McpMaxActions of [0, 11, 1.5, '5']) expect(() => validatePolicy({ McpMaxActions })).toThrow();
+});
 import { readMcpContext } from '@/src/mcp/capture';
 import { validatePolicy, assertAction } from '@/src/policy/model';
 import { sourceAllowed } from '@/src/policy/sources';

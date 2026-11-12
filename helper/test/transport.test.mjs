@@ -40,7 +40,12 @@ async function endpoint(t, config, instance = instanceId, { browser = 'chrome', 
     if (answer === false) return;
     if (typeof answer === 'function') return answer(message, socket);
     const allowed = message.credentialId === credentialId && message.credentialSecret === credentialSecret;
-    for (const chunk of resultChunks(message.id, allowed ? { ok: true, nonce: message.request.arguments.nonce, instanceId: instance, browser } : { ok: false })) writeFrame(socket, chunk);
+    let result = { ok: false };
+    if (allowed) {
+      const { arguments: args } = message.request;
+      result = { ok: true, nonce: args.nonce, instanceId: instance, browser };
+    }
+    for (const chunk of resultChunks(message.id, result)) writeFrame(socket, chunk);
   }, () => socket.destroy());
   t.after(() => { stop(); socket.destroy(); });
   writeFrame(socket, { type: 'hello', protocol: PROTOCOL, role: 'native', instanceId: instance, browser, caller, secret: config.hostSecret });
@@ -147,7 +152,7 @@ test('production tool discovery respects the browser catalog and still rejects c
   assert.deepEqual(JSON.parse(result.content[0].text), { error: 'read-only' });
   assert.deepEqual((await client.listTools()).tools.map(tool => tool.name), discovered);
 });
-test('SDK write reports unknown outcome when the native endpoint loses its reply', async t => {
+for (const name of ['click_element', 'write_elements']) test(`SDK ${name} reports unknown outcome when the native endpoint loses its reply`, async t => {
   const config = await fixture(t);
   let received = 0;
   await endpoint(t, config, instanceId, { answer: (_message, socket) => { received++; socket.destroy(); } });
@@ -156,7 +161,8 @@ test('SDK write reports unknown outcome when the native endpoint loses its reply
   const client = new Client({ name: 'synthetic-write-client', version: '1' }); t.after(() => client.close());
   await client.connect(transport);
   const operationId = randomUUID();
-  const result = await client.callTool({ name: 'click_element', arguments: { connectionId: randomUUID(), snapshotId: randomUUID(), elementRef: randomUUID(), operationId } });
+  const result = await client.callTool({ name, arguments: { connectionId: randomUUID(), snapshotId: randomUUID(), operationId,
+    ...(name === 'write_elements' ? { actions: [{ action: 'fill', elementRef: randomUUID(), text: 'Synthetic' }] } : { elementRef: randomUUID() }) } });
   assert.equal(result.isError, true);
   assert.deepEqual(JSON.parse(result.content[0].text), { operationId, status: 'outcome-unknown', error: 'outcome-unknown' });
   assert.equal(received, 1);
