@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Targeted read and click acceptance fixture</title>
+<style>
+body { max-width: 800px; margin: 32px auto; padding: 20px; font: 18px/1.5 system-ui; }
+section, form { border: 1px solid #bbb; padding: 20px; margin: 20px 0; }
+button, [role=button] { display: inline-block; padding: 12px; margin: 8px; border: 2px solid #345; cursor: pointer; }
+input { display: block; padding: 10px; } [role=status] { white-space: pre-wrap; }
+</style>
+<h1>Targeted read and click fixture</h1>
+<p>Synthetic local effects only. Reload resets counters. No form data leaves this page.</p>
+<form aria-label="Profile" onsubmit="return false">
+<label>Display name<input aria-describedby="hint" aria-errormessage="error" aria-invalid="true" required></label>
+<p id="hint">Use a public display name.</p><p id="error">Enter at least three characters.</p>
+<input placeholder="Unnamed public hint" aria-describedby="hint">
+<button type="button" data-effect="native"><span>Native counter</span> <svg width="20" height="20" aria-hidden="true"><path d="M0 10H20M10 0V20" stroke="black"/></svg></button>
+<div role="button" tabindex="0" data-effect="custom"><span>Custom counter</span> <svg width="20" height="20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="navy"/></svg></div>
+<button type="button" data-effect="open">Open dialog</button>
+<button type="button" data-effect="next">Next</button><button type="button" data-effect="back">Back</button>
+<button type="button" data-effect="async">Async update</button>
+<p role="status" aria-label="Fixture counters" id="counters"></p>
+</form>
+<form aria-label="Billing" onsubmit="return false"><label>Display name<input></label><button type="button">Next</button></form>
+<section aria-label="Negative cases">
+<div role="button">Role without focusability</div>
+<div role="button" tabindex="-1">Negative tabindex</div>
+<div role="link" tabindex="0">Unsupported custom link</div>
+<div role="button" tabindex="0" aria-disabled="true">Disabled custom button</div>
+<div role="button" tabindex="0" inert>Inert custom button</div>
+<div role="button" tabindex="0" style="position:relative">Covered custom button<span style="position:absolute;inset:0;z-index:2;background:#ddd" role="button" tabindex="0">Independent overlay</span></div>
+</section>
+<dialog aria-label="Fixture dialog"><p>Dialog is open.</p><button type="button" data-effect="close">Close dialog</button></dialog>
+<a href="/next.html">Navigate to another fixture document</a>
+<script src="/targeted.js"></script>
+</html>
