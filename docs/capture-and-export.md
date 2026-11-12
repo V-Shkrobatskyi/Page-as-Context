@@ -28,7 +28,7 @@ The popup supports **Semantic Text** (default) and **Markdown**. `Compact` is th
 
 Export headers include `Browser:` between `URL:` and `Captured:` in both formats and every compression profile. It records the browser name, Desktop or Android platform when known, and the available version. Firefox uses runtime metadata; Chromium uses local browser hints with a User-Agent fallback. A reduced version is shown as its major version; unavailable versions are omitted, and missing metadata appears as `Unavailable`. This adds no permissions or network requests.
 
-Export attribution includes the installed extension version and a settings digit, for example `2.2.5/7/d (created by V. Shkrobatskyi)` (illustrative version). The codes are Without `0`, Detailed `2`, Compact `4`, Maximum `6`; add `1` when **Redact sensitive data** is enabled. When redaction is enabled, a final `/d` records the default filter configuration for the installed version; `/m` records modified built-in switches or case settings, or any custom rules (including disabled ones). Restoring the default configuration returns the suffix to `/d`. The suffix is omitted when redaction is off. The digit records the selected profile even when Maximum falls back to Compact, and the privacy option rather than a guarantee that every sensitive value was found.
+Export attribution includes the installed extension version and a settings digit, for example `2.2.7/7/d (created by V. Shkrobatskyi)` (illustrative version). The codes are Without `0`, Detailed `2`, Compact `4`, Maximum `6`; add `1` when **Redact sensitive data** is enabled. When redaction is enabled, a final `/d` records the default filter configuration for the installed version; `/m` records modified built-in switches or case settings, or any custom rules (including disabled ones). Restoring the default configuration returns the suffix to `/d`. The suffix is omitted when redaction is off. The digit records the selected profile even when Maximum falls back to Compact, and the privacy option rather than a guarantee that every sensitive value was found.
 
 The popup shows the exact JavaScript character count (including boundaries for Copy), a rough token estimate (`ceil(characters / 4)`), and context reduction relative to Without output with the same format and privacy setting. Boundaries are excluded from the reduction ratio. The estimate is not model-specific tokenization. Maximum uses a separate local cost heuristic for packing; it does not bundle a tokenizer or guarantee savings for every model.
 
@@ -284,3 +284,12 @@ labels/hints, secret controls and changed identity never gain this exception.
 A matched node whose ref was removed yields `target-filtered`; missing or
 ambiguous identities retain `target-replaced-or-filtered`. Applied is still not
 a claim that the application persisted the value.
+
+MCP also offers `read_target_context` (2.2.6): exact role/name search, optional
+named semantic group, and a bounded target or group response. Ambiguity and
+partial capture are explicit; missing errors do not prove validation success.
+The full capture still runs internally. See the [targeted read contract](mcp-development.md#exact-targeted-reads).
+
+MCP capture (2.2.7) rejects internal browser error documents and actual document
+origins outside the tab grant before returning context or action refs. A failed
+navigation may leave an HTTP tab URL while the browser displays an internal error page.
