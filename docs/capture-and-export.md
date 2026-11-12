@@ -28,7 +28,7 @@ The popup supports **Semantic Text** (default) and **Markdown**. `Compact` is th
 
 Export headers include `Browser:` between `URL:` and `Captured:` in both formats and every compression profile. It records the browser name, Desktop or Android platform when known, and the available version. Firefox uses runtime metadata; Chromium uses local browser hints with a User-Agent fallback. A reduced version is shown as its major version; unavailable versions are omitted, and missing metadata appears as `Unavailable`. This adds no permissions or network requests.
 
-Export attribution includes the installed extension version and a settings digit, for example `2.2.4/7/d (created by V. Shkrobatskyi)` (illustrative version). The codes are Without `0`, Detailed `2`, Compact `4`, Maximum `6`; add `1` when **Redact sensitive data** is enabled. When redaction is enabled, a final `/d` records the default filter configuration for the installed version; `/m` records modified built-in switches or case settings, or any custom rules (including disabled ones). Restoring the default configuration returns the suffix to `/d`. The suffix is omitted when redaction is off. The digit records the selected profile even when Maximum falls back to Compact, and the privacy option rather than a guarantee that every sensitive value was found.
+Export attribution includes the installed extension version and a settings digit, for example `2.2.5/7/d (created by V. Shkrobatskyi)` (illustrative version). The codes are Without `0`, Detailed `2`, Compact `4`, Maximum `6`; add `1` when **Redact sensitive data** is enabled. When redaction is enabled, a final `/d` records the default filter configuration for the installed version; `/m` records modified built-in switches or case settings, or any custom rules (including disabled ones). Restoring the default configuration returns the suffix to `/d`. The suffix is omitted when redaction is off. The digit records the selected profile even when Maximum falls back to Compact, and the privacy option rather than a guarantee that every sensitive value was found.
 
 The popup shows the exact JavaScript character count (including boundaries for Copy), a rough token estimate (`ceil(characters / 4)`), and context reduction relative to Without output with the same format and privacy setting. Boundaries are excluded from the reduction ratio. The estimate is not model-specific tokenization. Maximum uses a separate local cost heuristic for packing; it does not bundle a tokenizer or guarantee savings for every model.
 
@@ -218,6 +218,56 @@ The same catalog and execution path serve native plugins and Local HTTP (HFS).
 Existing installed native plugin packages require the newly built helper catalog
 and a client tool refresh before they can advertise the optional argument.
 `click_element`, `select_option` and `set_checked` continue returning full context.
+
+### Grouped native writes (development)
+
+`write_elements` accepts `connectionId`, a current `snapshotId`, one
+`operationId` and an explicit ordered `actions` list. Each item is a `fill`
+with `elementRef` and `text`, a `select-option` with `elementRef` and
+`optionRef`, or a `set-checked` with `elementRef` and boolean `checked`.
+All refs must come from the same visible snapshot. No clicks, submit,
+selectors, scripts, repeated targets or implicit extra actions are accepted.
+
+The model chooses the group size through that list. **Maximum actions per
+write call** defaults to 10 and accepts 1–10 in MCP Access and approval.
+`McpMaxActions` may impose a lower organization ceiling. The effective
+`maxActions` is returned by `get_connection_status` (0 for read-only access).
+A list above the effective limit is rejected before any action starts; it
+is never silently truncated or split into automatically continued groups.
+Text is limited to 10,000 UTF-16 units per value, 20,000 per group, and
+60,000 UTF-8 bytes for the compact arguments. One action per call remains
+available through either a one-item list or the existing single-action tools.
+
+Actions execute sequentially under one tab lock. The extension performs a
+sanitized preflight, rechecks authorization and identity before each dispatch,
+recaptures after approval and observes for 150 ms after each applied action.
+Changes outside the supported action effect/status regions, uncertain target
+identity, partial capture, errors or loss of access stop the group. Known
+dependencies should be separated into different calls. These checks cannot
+prove independence of hidden application state or predict later asynchronous
+changes. Website event handlers may themselves submit data or cause navigation.
+Per-action browser approval remains per action unless connection approval is
+already allowed. The existing 85-second browser request deadline bounds the
+whole group, including approvals; a long group can stop partway through.
+
+The response contains indexed `actions` receipts (`applied`, `rejected`,
+`not-started`, `outcome-unknown`), overall `status` (`applied`, `partial`,
+`rejected`, `outcome-unknown`), optional `stopReason`, and one final full
+snapshot when available. Receipts never echo submitted values; the sanitized
+snapshot uses ordinary form-value controls. `snapshotUnavailable` explicitly
+marks missing context. Applied is not a persistence guarantee; there is no
+rollback. After lost dispatch confirmation, read to inspect the state and
+never automatically replay the write under a new operation ID.
+
+All writes invalidate old public refs. Internal identity mappings are local
+to the group; final refs come from the returned snapshot only. Repeating the
+same operation ID and payload returns receipts without repeating actions or
+retaining page contents. Changing the payload under the same ID is rejected.
+Deduplication lasts only for the live grant; it is not a cross-restart
+exactly-once guarantee. Current native clients need a rebuilt helper catalog,
+and existing HFS installations need the updated relay for the write timeout.
+Installed packages are not updated by source changes. Targeted read is not
+part of this implementation; use `read_page_context` for fresh discovery.
 
 ### Empty values, input hints and masked text targets
 

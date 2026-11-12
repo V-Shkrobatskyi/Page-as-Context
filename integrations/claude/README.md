@@ -135,3 +135,10 @@ notifications, pending setup semantics, invalid requests, cleanup and a real
 stdio regression for the Claude Code entry point. The MCPB checker additionally
 uses the unpacked archive, bundled runtime and isolated synthetic native hosts
 to verify pairing/profile changes independently for Chrome and Firefox.
+
+## Grouped native writes, package 1.2.5
+
+The Desktop and Code packages include helper 0.2.3 with `write_elements`.
+The extension 2.2.5 enforces the configured action limit and checks access and
+page state between actions. This version replaces the earlier 1.2.4 candidate
+without changing its dual-browser setup. Existing installations require an update.

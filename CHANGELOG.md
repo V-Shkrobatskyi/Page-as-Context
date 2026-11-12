@@ -1,6 +1,14 @@
 # Changelog
 
-## 2.2.4 — unreleased
+## 2.2.5 — unreleased
+
+- Add `write_elements` for explicitly listed native fill/select/checkbox actions, executed sequentially with access/identity checks, stop-on-change behavior, per-step receipts and receipt-only retries. Add Maximum actions per write call (default 10, configurable 1–10) and the optional `McpMaxActions` organization ceiling. Existing single-action tools remain compatible. Development changes; installed clients and release packages are not updated automatically.
+
+- Align the write limit and tab inactivity settings in equal-width columns and move their explanations into accessible help tooltips.
+
+- Update desktop plugin packages to 1.2.5 and the common helper to 0.2.3 to distribute the grouped write catalog and transport changes. Existing installations require an explicit update.
+
+## 2.2.4
 
 - Preserve known empty Chrome AX values, expose filtered placeholder hints for unnamed Firefox native fields, and retain refs only for eligible partially masked text values with stable labels and node identities. Keep full hiding and mandatory exclusions fail-closed; distinguish filtered targets in fill fallback diagnostics.
 
