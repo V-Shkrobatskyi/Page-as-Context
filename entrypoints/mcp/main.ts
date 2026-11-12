@@ -11,6 +11,10 @@ import { MCP_STATE_CHANGED } from '@/src/mcp/ui-events';
 import { downloadBlob } from '@/src/save-context';
 import { isDownloadCancellation } from '@/src/download-errors';
 import { hfsLauncher } from '@/src/mcp/launchers';
+import { setupSettingHelp } from './setting-help';
+
+const disposeSettingHelp = setupSettingHelp();
+window.addEventListener('pagehide', disposeSettingHelp, { once: true });
 
 const get = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const status = get('status'), output = get<HTMLTextAreaElement>('output');
@@ -75,12 +79,14 @@ function draft(): McpSettings {
   const amount = Number(get<HTMLInputElement>('timeout-amount').value);
   return { version: 1, nativeEnabled: get<HTMLInputElement>('native-enabled').checked, hfs: { enabled: get<HTMLInputElement>('hfs-enabled').checked, endpoint: get<HTMLInputElement>('hfs-endpoint').value }, connection: get<HTMLSelectElement>('connection').value as 'automatic' | 'manual', enabled: get<HTMLInputElement>('enabled').checked, mode: get<HTMLSelectElement>('mode').value as McpSettings['mode'],
     autoDisconnect: { unit, amount: unit === 'unlimited' && (!Number.isSafeInteger(amount) || amount < 1 || amount > 999) ? 1 : amount },
+    maxActions: Number(get<HTMLInputElement>('max-actions').value),
     writeApproval: get<HTMLSelectElement>('write-approval').value as McpSettings['writeApproval'], inherit: get<HTMLInputElement>('inherit').checked,
     preferences: { format: get<HTMLSelectElement>('format').value as ExportPreferences['format'], compression: get<HTMLSelectElement>('compression').value as CompressionLevel, redactSensitiveData: get<HTMLInputElement>('redact').checked }, ...(savedData ? { data: savedData } : {}) };
 }
 function controls() {
   for (const id of ['enabled', 'connection', 'mode', 'inherit', 'apply', 'apply-access', 'apply-hfs', 'apply-native', 'write-approval', 'native-enabled', 'hfs-enabled', 'hfs-endpoint']) get<HTMLInputElement | HTMLButtonElement>(id).disabled = locked;
   get<HTMLSelectElement>('write-approval').disabled = locked || get<HTMLSelectElement>('mode').value === 'read-only';
+  get<HTMLInputElement>('max-actions').disabled = locked || get<HTMLSelectElement>('mode').value === 'read-only';
   const automaticDraft = get<HTMLSelectElement>('connection').value === 'automatic';
   get('auto-disconnect-setting').hidden = !automaticDraft;
   get<HTMLSelectElement>('timeout-unit').disabled = locked || !automaticDraft;
@@ -143,6 +149,7 @@ async function load() {
     get<HTMLInputElement>('hfs-enabled').checked = settings.hfs?.enabled === true;
     get<HTMLInputElement>('hfs-endpoint').value = settings.hfs?.endpoint ?? 'http://127.0.0.1:39861'; get<HTMLInputElement>('inherit').checked = settings.inherit;
     get<HTMLSelectElement>('mode').value = settings.mode;
+    get<HTMLInputElement>('max-actions').value = String(settings.maxActions ?? 10);
     get<HTMLSelectElement>('connection').value = settings.connection ?? 'manual';
     const timeout = settings.autoDisconnect ?? defaultAutoDisconnect();
     get<HTMLInputElement>('timeout-amount').value = String(timeout.amount);

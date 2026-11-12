@@ -81,14 +81,17 @@
               <label for="connection">Connection<select id="connection"><option value="automatic">Automatic</option><option value="manual">Manual</option></select></label>
               <label id="mode-label" for="mode">Mode<select id="mode" aria-describedby="mode-note"><option value="read-only">Read only</option><option value="read-write">Read and write</option></select></label>
               <label for="write-approval">Write approval<select id="write-approval" aria-describedby="mode-note"><option value="each-action">Ask before each action</option><option value="session">Allow for this connection</option></select></label>
-            </div>
-            <div id="auto-disconnect-setting" class="timeout-setting" hidden>
-              <label for="timeout-amount">Auto-disconnect tabs</label>
-              <div class="timeout-fields">
-                <input id="timeout-amount" type="number" min="1" max="999" step="1" value="1" required aria-label="Inactivity duration" aria-describedby="timeout-note" />
-                <select id="timeout-unit" aria-label="Inactivity period" aria-describedby="timeout-note"><option value="minutes">minutes</option><option value="hours" selected>hours</option><option value="days">days</option><option value="unlimited">unlimited</option></select>
+              <div id="auto-disconnect-setting" class="timeout-setting" hidden>
+                <div class="setting-label"><label for="timeout-amount">Auto-disconnect tabs</label><span class="setting-help"><button type="button" class="help-toggle" aria-label="About tab auto-disconnect" aria-controls="timeout-note" aria-describedby="timeout-note" aria-expanded="false">?</button><span id="timeout-note" class="help-text" role="tooltip" hidden>After inactivity. Successful reads and actions restart the timer for that tab. Organization limits still apply.</span></span></div>
+                <div class="timeout-fields">
+                  <input id="timeout-amount" type="number" min="1" max="999" step="1" value="1" required aria-label="Inactivity duration" aria-describedby="timeout-note" />
+                  <select id="timeout-unit" aria-label="Inactivity period" aria-describedby="timeout-note"><option value="minutes">minutes</option><option value="hours" selected>hours</option><option value="days">days</option><option value="unlimited">unlimited</option></select>
+                </div>
               </div>
-              <p id="timeout-note" class="note">After inactivity. Successful reads and actions restart the timer for that tab. Organization limits still apply.</p>
+              <div class="setting-field write-limit-setting">
+                <div class="setting-label"><label for="max-actions">Maximum actions per write call</label><span class="setting-help"><button type="button" class="help-toggle" aria-label="About maximum actions per write call" aria-controls="max-actions-note" aria-describedby="max-actions-note" aria-expanded="false">?</button><span id="max-actions-note" class="help-text" role="tooltip" hidden>The AI chooses how many actions to send, up to this limit (1–10). Actions run sequentially with checks between them. Use 1 for one action per call. Organization limits may reduce this value.</span></span></div>
+                <input id="max-actions" type="number" min="1" max="10" step="1" value="10" required aria-describedby="max-actions-note" />
+              </div>
             </div>
             <p id="mode-note" class="note">Mode limits tab access. Automatic: choose AI Read or Write in the popup; access follows the tab across sites. New tabs start Off. Manual: connect a tab here. Write approval sets the default; Skip prompts changes one Automatic client connection. Organization rules still apply.</p>
             <div class="apply-bar">
