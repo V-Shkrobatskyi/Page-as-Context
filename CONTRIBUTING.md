@@ -56,6 +56,11 @@ Use a descriptive prefix:
 - `docs/...` for documentation-only changes
 - `chore/...` for maintenance
 
+Before committing or pushing, review [CHANGELOG.md](CHANGELOG.md) and the
+[release guide](docs/releasing.md). Update relevant changes, confirmed release
+status or workflow details; keep unpublished work marked unreleased. GitHub
+publication dates, store rollout and local build/test dates are separate facts.
+
 Commit focused changes, push the branch, and open a pull request into `main`. Include a concise description of the change and the checks you ran. Merge only after the relevant checks pass, then delete the branch.
 
 ## Sensitive data

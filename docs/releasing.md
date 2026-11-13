@@ -3,9 +3,12 @@
 Use this checklist for each release. Build instructions belong in
 [BUILDING.md](../BUILDING.md), store text in [store-listing.md](store-listing.md),
 and Firefox submission details in [firefox-release.md](firefox-release.md).
-Keep submission status, browser verification results, artifact hashes and reviewer
-correspondence in the release PR or GitHub Release rather than repeating them in
-user documentation.
+[CHANGELOG.md](../CHANGELOG.md) records source changes and dated GitHub release
+history. This guide records the release procedure. Keep public rollout status,
+browser verification results and artifact hashes in the GitHub Release; keep
+private reviewer correspondence in the store submission or private release notes.
+GitHub publication, store submission, store approval and local acceptance are
+separate events; do not infer one date from another.
 
 ## 1. Prepare the version
 
@@ -18,13 +21,28 @@ npm version X.Y.Z --no-git-tag-version
 ```
 
 This updates package metadata without creating a Git commit or tag. Update the
-changelog with user-visible changes. Documentation corrections alone do not need
-a version bump; rebuild the matching source archive if they precede submission.
+changelog with user-visible changes under the current unreleased version.
+Before committing or pushing, review the changelog and this guide; update entries
+for relevant changes and revise the procedure only when the workflow changes.
+Do not add empty edits merely to touch both files.
+Documentation corrections alone do not need a version bump; rebuild the matching source archive if they precede submission.
 Use a higher version for an update to an already published package.
 
 Check that README, the offline guide, privacy policy and store descriptions agree
 with the implementation. Preserve previously submitted packages and release tags;
 release history must identify the code and files actually distributed.
+
+Prepare the version's changelog and release-history row before the final merge.
+For immediate publication, set the release date (`YYYY-MM-DD`) as part of that
+preparation; distinguish a prepared release from confirmed GitHub publication.
+If publication moves to another day, correct the date before the final build.
+Otherwise retain `unreleased` until the release is ready. No separate post-release
+commit is required when the prepared date matches publication. Record the actual
+GitHub publication timestamp (UTC) in the Release description; do not infer it
+from a commit, tag or test date.
+If several source versions ship together, identify intermediate entries as
+`development milestone, included in X.Y.Z`; do not assign them separate release
+dates. Historical publication dates must be verified against the GitHub Release.
 
 ## 2. Verify the release
 
@@ -46,7 +64,13 @@ relevant checks after further code changes.
 
 ## 3. Build the final packages
 
-Build from the intended merged revision with a clean working tree:
+Build from one intended merged commit with a clean working tree. Record its full
+SHA; use that same commit for all extension/plugin packages and matching sources
+included in this release. Keep the pinned toolchain and lockfiles. Tag that commit
+as `vX.Y.Z`; creating a tag does not edit source files or require another merge.
+`main` can continue moving after the release commit is chosen.
+
+Run the browser packaging commands:
 
 ```sh
 npm run zip
@@ -66,10 +90,10 @@ ZIP once for Desktop and Android. Create extension and source ZIPs from the same
 source revision, without edits between them. The Firefox package checker compares
 uncompressed files with the build and prints hashes.
 
-The upcoming 1.3.0 release is the first GPL-3.0-only release. Keep previously
-distributed MIT artifacts unchanged. Include LICENSE, LICENSING.md and third-party
-notices in sources; verify LICENSE, license.html and THIRD_PARTY_NOTICES.txt in
-both browser packages. Check that license.html contains the actual package version
+The current source is GPL-3.0-only; the license transition was introduced for
+1.3.0. Keep previously distributed MIT artifacts unchanged. Include LICENSE,
+LICENSING.md and third-party notices in sources; verify LICENSE, license.html and
+THIRD_PARTY_NOTICES.txt in both browser packages. Check that license.html contains the actual package version
 and links to its matching `vX.Y.Z` tag and release, with no template placeholders.
 
 Before distributing a GPL build through either store, publish its `vX.Y.Z` tag
@@ -82,8 +106,15 @@ these artifacts, prepare a new version instead of silently replacing old sources
 
 Rebuild a submitted source archive from a clean directory following BUILDING.md
 and compare paths and bytes with the extension ZIP. ZIP timestamps do not need
-to match. The reviewer archive omits unit tests, so use the build commands rather
-than the full contributor suite for this reproduction.
+to match. The reviewer archive includes allowlisted test subsets (including MCP,
+fixtures, helpers, manual and performance files), not the entire test suite. Use
+the build commands rather than the full contributor suite for this reproduction.
+
+If source changes before publication, merge the fix and rebuild affected packages
+and matching sources from the new chosen commit. Do not mix old and new artifacts.
+Once published, preserve the tag and distributed files; changed package bytes
+require a new version. Release-description and store-status updates can be made
+on GitHub without changing the source commit.
 
 ## 4. Prepare the listing
 
@@ -114,9 +145,22 @@ a listing for the first release. Follow the store's validation and review steps:
 Keep the Firefox add-on ID unchanged across updates. Build commands do not sign
 or publish packages; renaming an unsigned ZIP to XPI does not sign it.
 
-After publication, install from the store on each listed platform and check the
-main export flows. Add verified store links to README. Record the publication
-date and platform in the GitHub Release, attach the distributed packages and
-matching sources, and tag the source revision as `vX.Y.Z`. Preserve existing tags
-and artifacts when publishing a release that was prepared earlier. Update the
-changelog's unreleased heading when the version is released.
+Publish the GitHub Release for the chosen tag and attach the checked packages,
+matching sources and SHA-256 hashes before GPL builds are distributed through
+stores. Record the actual GitHub publication timestamp (UTC), full source commit,
+and extension/helper/plugin versions actually included; their versions are independent.
+A successful local build or client installation is not public release evidence.
+
+Track Chrome Web Store and Mozilla Add-ons separately in the Release description:
+submitted version/date, approval or availability date when confirmed, and listing
+link. Use `pending` or `not verified` when appropriate. These status updates do not
+require a source commit or another merge. Avoid private reviewer correspondence.
+
+After store publication, install on each listed platform and check the main export
+flows. Record actual browser/device versions and results. Add or correct store
+links in repository docs only when necessary, through a normal docs PR.
+
+Reconcile the changelog heading and release-history table with the actual GitHub
+publication date in the next docs PR only if a correction is needed. Preserve the release tag and
+artifacts; do not rebuild an already published version merely to include this
+historical bookkeeping correction. Future release builds use the updated docs.

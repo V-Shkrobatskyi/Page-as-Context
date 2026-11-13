@@ -1,13 +1,42 @@
 # Changelog
 
-## 2.2.7 — unreleased
+This file records changes by source version. **Unreleased** entries have not
+been published as separate GitHub releases. **Development milestones** below
+were included in a later release; their headings do not imply separate publication.
+Release dates may be set during final preparation for immediate publication;
+correct them if publication moves to another day. Historical dates below are
+GitHub publication dates in UTC, not store approval dates. Store availability
+and artifact details belong in the linked GitHub Release.
+
+## Release history
+
+| Extension | Release date | Packages |
+| --- | --- | --- |
+| [2.2.7](https://github.com/V-Shkrobatskyi/Page-as-Context/releases/tag/v2.2.7) | 2026-11-13 | Chrome, Firefox and sources; ChatGPT, Claude Desktop/Code, Antigravity and GitHub Copilot app plugins 1.2.7; helper 0.2.4 |
+| [2.2.1](https://github.com/V-Shkrobatskyi/Page-as-Context/releases/tag/v2.2.1) | 2026-11-06 | Chrome, Firefox and sources; ChatGPT 1.2.1; Claude MCPB 0.2.1 |
+| [2.2.0](https://github.com/V-Shkrobatskyi/Page-as-Context/releases/tag/v2.2.0) | 2026-11-04 | Chrome, Firefox and sources; ChatGPT 1.2.0; Claude MCPB 0.2.0 |
+| [1.1.0](https://github.com/V-Shkrobatskyi/Page-as-Context/releases/tag/v1.1.0) | 2026-10-18 | Chrome, Firefox and sources |
+| [1.0.1](https://github.com/V-Shkrobatskyi/Page-as-Context/releases/tag/v1.0.1) | 2026-10-11 | Firefox XPI, submission ZIP and sources |
+| [1.0.0](https://github.com/V-Shkrobatskyi/Page-as-Context/releases/tag/v1.0.0) | 2026-10-11 | Chrome ZIP |
+
+Version 2.2.7 is dated for immediate release preparation; its GitHub publication
+is pending. This table is not a list of store versions. The 1.0.0 release
+notes confirm Chrome Web Store distribution; 1.0.1 confirms Mozilla Add-ons
+publication while Chrome remained on 1.0.0. Those notes do not establish exact
+store publication timestamps. Later store rollout dates must be recorded separately.
+
+## Version changes
+
+### 2.2.7 — 2026-11-13
+
+- Streamline README installation, capture and MCP guidance; consolidate shared tool contracts and pairing instructions, refresh package examples, and clarify release history and maintenance rules.
 
 - Align ChatGPT, Claude Desktop/Code, Antigravity and GitHub Copilot app plugin packages at 1.2.7 at the user's request; rebuild distribution packages with the existing helper 0.2.4.
 
 - Reject MCP capture results whose actual document URL is internal, invalid or outside the authorized HTTP tab origin before serializing context or retaining action refs. This covers Chrome's internal error document after a failed HTTP navigation. Dispose the unretained action snapshot on rejection.
 - Discovered during local live native-link acceptance when the synthetic fixture server was unavailable; this fix changes the extension only. Helper remains 0.2.4.
 
-## 2.2.6 — unreleased
+### 2.2.6 — unreleased
 
 - Add `read_target_context` for exact privacy-filtered semantic target search, optional named group context, bounded candidates and explicit incomplete/unavailable results. Every read replaces snapshot refs; only displayed targets remain addressable.
 - Preserve accessible descriptions and exposed inline error relationships through privacy, data controls, compression and both serializers.
@@ -15,7 +44,7 @@
 - Observe a bounded window after clicks before capturing context. Applied receipts remain applied if post-action capture fails; retries never replay clicks.
 - Update helper to 0.2.4 and desktop plugin sources to 1.2.6 for the shared catalog. Live browser/client acceptance is tracked separately from automated checks.
 
-## 2.2.5 — unreleased
+### 2.2.5 — unreleased
 
 - Add `write_elements` for explicitly listed native fill/select/checkbox actions, executed sequentially with access/identity checks, stop-on-change behavior, per-step receipts and receipt-only retries. Add Maximum actions per write call (default 10, configurable 1–10) and the optional `McpMaxActions` organization ceiling. Existing single-action tools remain compatible. Development changes; installed clients and release packages are not updated automatically.
 
@@ -23,7 +52,7 @@
 
 - Update desktop plugin packages to 1.2.5 and the common helper to 0.2.3 to distribute the grouped write catalog and transport changes. Existing installations require an explicit update.
 
-## 2.2.4
+### 2.2.4 — unreleased
 
 - Preserve known empty Chrome AX values, expose filtered placeholder hints for unnamed Firefox native fields, and retain refs only for eligible partially masked text values with stable labels and node identities. Keep full hiding and mandatory exclusions fail-closed; distinguish filtered targets in fill fallback diagnostics.
 
@@ -41,14 +70,14 @@
 - Normalize the default at the shared browser execution boundary for native and HFS clients, and advertise it in the common tool catalog. Verify omitted/scoped/full behavior and retry protection.
 - Update the common helper to 0.2.2 and affected desktop packages to 1.2.4 so existing 1.2.3 installations can receive the changed catalog without reusing a release version.
 
-## 2.2.3 — unreleased
+### 2.2.3 — unreleased
 
 - Add optional `responseMode: scoped` to `fill_element`, preserving full responses by default and after other actions. Return the filled control, a bounded DOM-parent summary and changed status/alert regions; fall back to a full response with a reason when identity, privacy, capture completeness or other page changes prevent a safe scope.
 - Preserve snapshot invalidation, grant/policy checks and receipt-only retry protection across native and HFS transports. Observe 150 ms before the post-fill capture without claiming application persistence or observing later asynchronous changes.
 - Focus native text controls and emit a replacement InputEvent for text fills. Keep existing unsupported control types unchanged.
 - Update the extension to 2.2.3, common helper to 0.2.1 and affected desktop package sources to 1.2.3. Installed packages are not changed automatically.
 
-## 2.2.2 — unreleased
+### 2.2.2 — unreleased
 
 - Distinguish app plugins with a native helper from the universal Local HTTP (HFS) MCP server in the bundled guide, with separate setup links and connection requirements.
 - Align ChatGPT, Claude Desktop/Code, Antigravity and GitHub Copilot app packages at 1.2.2, shipping the streamlined English guides with web links usable outside the repository. Keep existing installed releases intact.
@@ -57,7 +86,7 @@
 - Simplify the shared MCP user guide, move developer setup and maintenance into a separate reference, and shorten client installation guides. Keep one copyable pairing request with setup info appended at the end.
 - Synchronize extension release metadata and privacy version/date for 2.2.2. Client package versions are aligned separately at 1.2.2; the helper version is unchanged.
 
-## 2.2.1 — unreleased
+### 2.2.1 — 2026-11-06
 
 - Normalize empty Chrome accessibility names consistently during capture and action validation, preventing false stale-snapshot rejections for unnamed controls. Custom editors still need a supported input mechanism.
 - Support explicitly confirmed browser-instance changes in the shared plugin helper with separate instance credentials, activation after successful code pairing, and preservation of the previous profile after cancellation or failure. Running updated plugin servers switch profiles without restarting the chat.
@@ -67,7 +96,7 @@
 - Package the updated shared helper in ChatGPT plugin 1.2.1 and Claude Desktop / Claude Code 0.2.1.
 - Update the bundled guide and README to the new v2.2.0 demo video, including the README thumbnail; synchronize release and privacy metadata for 2.2.1.
 
-## 2.2.0 — unreleased
+### 2.2.0 — 2026-11-04
 
 - Clarify platform support: the ChatGPT Desktop, Claude Desktop and Claude Code packages target macOS Apple Silicon only. Local HTTP (HFS) reads and actions were verified in Chrome and Firefox on macOS and Windows 10 x64; Linux startup remains unverified. Windows x64, Intel Mac and Linux desktop packages are not provided.
 
@@ -89,7 +118,7 @@
 - Add narrow optional loopback access for Chrome, transport-aware consent, managed transport/endpoint controls, and HTTP trust/setup documentation.
 - Manually verify Chrome/Firefox HTTP reads and actions on macOS and Windows 10 x64, Antigravity reads and actions, and Goose/Ollama/Llama reads with explicit connection IDs. Linux startup, broader lifecycle recovery and reliable local-model tool chaining remain unverified.
 
-## 2.1.0 — unreleased
+### 2.1.0 — development milestone, included in 2.2.0
 
 - Resolve shared-tab metadata with Chrome's existing debugger API after activeTab access ends, without requesting extra tabs/host permissions or exposing unshared targets.
 
@@ -126,19 +155,19 @@
 - Use one Claude integration/version for Desktop and Code, with shared sources and client-specific installation manifests and credentials; update ChatGPT.
 
 
-## 2.0.1 — unreleased
+### 2.0.1 — development milestone, included in 2.2.0
 
 - Show the applied access mode on the MCP tab connection button without a separate write checkbox.
 - Reconnect an active helper once after applying MCP settings, preserving permission checks and requiring new tab connections.
 - Keep the helper and other clients connected when revoking or renaming one client, and bind tab grants to its credentials.
 
-## 2.0.0 — unreleased
+### 2.0.0 — development milestone, included in 2.2.0
 
 - Add optional local MCP integration for explicitly shared Chrome and Firefox tabs, with read-only and read/write modes, pairing, per-tab grants, action approvals, Stop and Revoke.
 - Apply shared privacy filters, data controls and organization policies to MCP context and supported page actions.
 - Add MCP settings and approval pages, local output previews, and a private ChatGPT desktop plugin with in-chat browser setup.
 
-## 1.6.0
+### 1.6.0 — development milestone, included in 2.2.0
 
 - Rename the extension to Page as Context with the popup subtitle "Structured browser context for AI."
 - Rename internal branding and file formats while preserving the published extension ID and popup preferences.
@@ -177,17 +206,17 @@
 - Simplify preview and filter pages, expand the editor to the available height and keep preview actions at the bottom.
 - Replace non-English test examples while preserving Unicode coverage.
 
-## 1.4.2
+### 1.4.2 — development milestone, included in 2.2.0
 
 - Add compact Find and replace controls to Preview & edit, with literal text search, match counts, case matching, forward/backward navigation and replacement of one or all matches.
 - Scroll the editor automatically to selected matches, including wrapped text and navigation after replacement.
 - Support keyboard search shortcuts and prevent replacements that exceed the draft size limit.
 
-## 1.4.1
+### 1.4.1 — development milestone, included in 2.2.0
 
 - Move Preview & edit, Copy page context and Save to file above the popup preferences panel for quicker access.
 
-## 1.4.0
+### 1.4.0 — development milestone, included in 2.2.0
 
 - Add Regex filters using RE2JS, preset expressions, validation limits and migration of earlier token rule types.
 - Add automatic email/domain, phone and English personal-field masking, plus full hiding for emails, phones, personal fields, payment card numbers and IBANs. Card and IBAN detection includes checksum validation.
@@ -198,7 +227,7 @@
 - Extend Try filters to test text, labelled fields, links, page titles and page URLs.
 - Keep Customize compact on Firefox Android and dismiss the popup after Customize or Preview opens successfully.
 
-## 1.3.0
+### 1.3.0 — development milestone, included in 2.2.0
 
 - Improve Try filters with isolated selected-rule tests, independent matched-rule diagnostics, field-label results and synthetic matching/near-miss examples based on the selected type and current terms.
 
@@ -209,13 +238,15 @@
 
 - License this release under GPL-3.0-only and add an offline license and source-code page. Previously distributed MIT versions retain their original license; bundled third-party notices are preserved.
 
-## 1.1.0 — draft
+### 1.1.0 — 2026-10-18
 
 - Capture eligible iframe documents in Chrome and Firefox while preserving their page positions and document boundaries.
 - Capture available same-origin iframe documents by default in Firefox Desktop and Android.
 - Add an optional Firefox switch for other-site frames with one request for access to all HTTP/HTTPS websites and access removal when disabled.
 - Skip hidden frames and tracking pixels, apply shared capture limits, and report unavailable or changing documents.
 - Keep Firefox popup content responsive and add extension branding to the file saving page.
+
+### 1.0.1 — 2026-10-11
 
 - Keep Firefox Save files available after the Save As dialog closes the popup.
 - Prevent sticky touch hover and show immediate button feedback after Android Compression changes.
@@ -226,9 +257,9 @@
 - Remove separate Android build and package commands.
 - Update AMO source-package, submission, and manual verification instructions.
 
-## 1.0.0
+### 1.0.0 — 2026-10-11
 
-### Features
+#### Features
 
 - On-demand local capture of semantic page content: Chrome accessibility-tree snapshots and Firefox HTML/ARIA extraction.
 - Semantic Text and Markdown exports with Without, Detailed, Compact, and Maximum compression profiles.
@@ -236,7 +267,7 @@
 - Credential redaction enabled by default, persistent export preferences, export metrics, and browser/version attribution.
 - Separate Android build with responsive controls and Copy-only export.
 
-### Known limitations
+#### Known limitations
 
 - Android Save is unavailable because the downloads API is unsupported.
 - Firefox capture approximates accessible names and excludes embedded frames, closed shadow roots, canvas pixels, CSS-generated content, and unmounted virtualized UI.
