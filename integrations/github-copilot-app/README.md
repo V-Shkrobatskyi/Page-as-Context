@@ -1,7 +1,11 @@
 # GitHub Copilot app integration
 
+For installation, updates and removal, use the [app package guide](PACKAGE-README.md).
+Current source package version: **1.2.7**. Build examples below use that version;
+dated acceptance records and release notes retain the versions actually tested.
+
 Experimental Agent Plugins 1.0 package for local GitHub Copilot app sessions on
-macOS Apple silicon. Version 1.2.2 is independent of the browser extension,
+macOS Apple silicon. Source version 1.2.7 is independent of the browser extension,
 ChatGPT and Claude packages. Uses the same `serveMcp`, `packageClient`,
 `browserSetup`, profile store, broker and Native Messaging host as those clients.
 No HFS, HTTP listener or browser adapter is added. See [the user guide](PACKAGE-README.md)
@@ -16,7 +20,7 @@ End users receive the runtime and do not need these build tools.
 ```sh
 node scripts/mcp/build-github-copilot-app-package.mjs \
   --archive /private/tmp/node-v24.10.0-darwin-arm64.tar.gz \
-  --output 'artifacts/mcp/GitHub Copilot app 1.2.2 verified macOS arm64'
+  --output 'artifacts/mcp/GitHub Copilot app 1.2.7 verified macOS arm64'
 ```
 
 Add `--probe` with a different new output directory for the content-free loader
@@ -33,9 +37,9 @@ artifact. User-operated Chrome core acceptance is recorded in ACCEPTANCE.md. No 
 ## Check the actual artifact
 
 ```sh
-'artifacts/mcp/GitHub Copilot app 1.2.2 verified macOS arm64/marketplace/plugins/page-as-context/runtime/node' \
+'artifacts/mcp/GitHub Copilot app 1.2.7 verified macOS arm64/marketplace/plugins/page-as-context/runtime/node' \
   scripts/mcp/check-github-copilot-app-package.mjs \
-  'artifacts/mcp/GitHub Copilot app 1.2.2 verified macOS arm64/marketplace'
+  'artifacts/mcp/GitHub Copilot app 1.2.7 verified macOS arm64/marketplace'
 ```
 
 For a probe output use its runtime and append `--probe`. The checker copies the
@@ -84,7 +88,7 @@ App 1.1.35 runtime qualification passed on 7 November 2026. User-operated local
 UI installation and Chrome core acceptance passed on 9 November 2026. Firefox
 live testing was skipped at the user's request. See ACCEPTANCE.md for exact scope.
 
-## Aligned release 1.2.2
+## Historical aligned release 1.2.2
 
 This release aligns the four client package versions and ships the revised user
 guide inside each package, with web links that work outside the source checkout.

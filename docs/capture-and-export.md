@@ -187,103 +187,27 @@ See [HFS setup, trust boundary and verification limits](hfs-integration.md).
 
 ### Compact post-fill responses (2.2.3)
 
-Since 2.2.4, `fill_element` accepts optional `responseMode: "full" | "scoped"`; omission means
-`scoped`. Set `responseMode: "full"` to request the complete post-fill page.
-`scoped` still captures the whole permitted page internally and applies
-normal privacy/data controls and action-safe compression. It returns only the
-filled native text field, a structural summary of its immediate DOM parent and
-changed visible status/alert regions when the remaining sanitized semantics are
-unchanged. The parent is summarized by tag; its siblings/subtree are omitted.
-Unknown outside changes, replaced/filtered targets, incomplete captures, missing
-identity/parent information, navigation or bounds cause a full fallback.
-
-`snapshot.scope.kind` and `fallbackReason` describe the actual result. `omitted`,
-`parentSummaryOnly`, `relatedRegionRemoved` and `recovery` describe its limits.
-This is independent of `partial` and capture warnings. The scoped textual tool
-envelope has a conservative 16 KiB budget; comparison baselines are bounded to
-10,000 nodes and 512 KiB (conservative UTF-8 bound). Full fallback remains subject
-to the normal response policy limit. For scoped fill, a separate full internal capture obtains an operation-local
-privacy-filtered baseline immediately before mutation; the ordinary snapshot
-retains node identities/refs only. The baseline is released when the operation
-finishes and is never written to diagnostics or disk. This first version therefore
-uses two internal full captures around a scoped fill and optimizes model response
-size, not capture latency.
-
-Every action invalidates old refs. Scoped snapshots issue refs only for the
-returned controls; use `read_page_context` to reach fields outside that scope.
-A receipt of `applied` confirms action dispatch, not application persistence.
-The fixed 150 ms observation window does not confirm later asynchronous updates.
-After `snapshotUnavailable`, read again; never replay a write to refresh context.
-The same catalog and execution path serve native plugins and Local HTTP (HFS).
-Existing installed native plugin packages require the newly built helper catalog
-and a client tool refresh before they can advertise the optional argument.
-`click_element`, `select_option` and `set_checked` continue returning full context.
+Scoped `fill_element` responses return the filled field, a parent summary and
+related status changes when safe; otherwise they fall back to full context.
+They still use full internal captures and optimize response size, not capture
+latency. Every action invalidates old refs. Read again after unavailable context
+or an unknown result; never replay a write to refresh it. See the
+[scoped fill contract](mcp-development.md#scoped-post-fill-responses).
 
 ### Grouped native writes (development)
 
-`write_elements` accepts `connectionId`, a current `snapshotId`, one
-`operationId` and an explicit ordered `actions` list. Each item is a `fill`
-with `elementRef` and `text`, a `select-option` with `elementRef` and
-`optionRef`, or a `set-checked` with `elementRef` and boolean `checked`.
-All refs must come from the same visible snapshot. No clicks, submit,
-selectors, scripts, repeated targets or implicit extra actions are accepted.
-
-The model chooses the group size through that list. **Maximum actions per
-write call** defaults to 10 and accepts 1–10 in MCP Access and approval.
-`McpMaxActions` may impose a lower organization ceiling. The effective
-`maxActions` is returned by `get_connection_status` (0 for read-only access).
-A list above the effective limit is rejected before any action starts; it
-is never silently truncated or split into automatically continued groups.
-Text is limited to 10,000 UTF-16 units per value, 20,000 per group, and
-60,000 UTF-8 bytes for the compact arguments. One action per call remains
-available through either a one-item list or the existing single-action tools.
-
-Actions execute sequentially under one tab lock. The extension performs a
-sanitized preflight, rechecks authorization and identity before each dispatch,
-recaptures after approval and observes for 150 ms after each applied action.
-Changes outside the supported action effect/status regions, uncertain target
-identity, partial capture, errors or loss of access stop the group. Known
-dependencies should be separated into different calls. These checks cannot
-prove independence of hidden application state or predict later asynchronous
-changes. Website event handlers may themselves submit data or cause navigation.
-Per-action browser approval remains per action unless connection approval is
-already allowed. The existing 85-second browser request deadline bounds the
-whole group, including approvals; a long group can stop partway through.
-
-The response contains indexed `actions` receipts (`applied`, `rejected`,
-`not-started`, `outcome-unknown`), overall `status` (`applied`, `partial`,
-`rejected`, `outcome-unknown`), optional `stopReason`, and one final full
-snapshot when available. Receipts never echo submitted values; the sanitized
-snapshot uses ordinary form-value controls. `snapshotUnavailable` explicitly
-marks missing context. Applied is not a persistence guarantee; there is no
-rollback. After lost dispatch confirmation, read to inspect the state and
-never automatically replay the write under a new operation ID.
-
-All writes invalidate old public refs. Internal identity mappings are local
-to the group; final refs come from the returned snapshot only. Repeating the
-same operation ID and payload returns receipts without repeating actions or
-retaining page contents. Changing the payload under the same ID is rejected.
-Deduplication lasts only for the live grant; it is not a cross-restart
-exactly-once guarantee. Current native clients need a rebuilt helper catalog,
-and existing HFS installations need the updated relay for the write timeout.
-Installed packages are not updated by source changes. Targeted read is not
-part of this implementation; use `read_page_context` for fresh discovery.
+`write_elements` groups an explicit ordered list of supported native field
+changes, subject to the configured maximum (default 10). Actions can stop
+partway through, with no rollback or persistence guarantee. Browser approvals
+and privacy controls still apply. See the
+[grouped write contract](mcp-development.md#grouped-native-writes).
 
 ### Empty values, input hints and masked text targets
 
-Known empty Chrome AX string values are preserved as `value=""`; an omitted
-value is not treated as empty. Firefox may expose `placeholder` separately for
-unnamed native inputs/textarea, without changing their accessible name. Hints
-pass the same privacy pipeline and target validation detects changed hints.
-Maximum falls back to the ordinary serializer when these hints are present.
-
-For ordinary textbox/searchbox targets with an unchanged visible name or hint
-and internal node identity, partial personal-value masking can retain the action
-ref. The value stays masked. Full hiding, excluded form values, redacted target
-labels/hints, secret controls and changed identity never gain this exception.
-A matched node whose ref was removed yields `target-filtered`; missing or
-ambiguous identities retain `target-replaced-or-filtered`. Applied is still not
-a claim that the application persisted the value.
+Supported empty values and placeholders can help identify native text fields;
+partially masked values remain masked even when a safe action ref is retained.
+Full hiding and excluded values do not gain that exception. See the
+[target eligibility details](mcp-development.md#empty-values-input-hints-and-masked-text-targets).
 
 MCP also offers `read_target_context` (2.2.6): exact role/name search, optional
 named semantic group, and a bounded target or group response. Ambiguity and
@@ -293,3 +217,41 @@ The full capture still runs internally. See the [targeted read contract](mcp-dev
 MCP capture (2.2.7) rejects internal browser error documents and actual document
 origins outside the tab grant before returning context or action refs. A failed
 navigation may leave an HTTP tab URL while the browser displays an internal error page.
+
+## Native browser probes
+
+To run the opt-in Chrome iframe probe on isolated local fixtures:
+
+```bash
+npm run build
+node scripts/probe-chrome-iframes.mjs --extension
+```
+
+The probe uses a temporary browser profile. Its native CDP checks cover nested OOPIF, same-process frames, `srcdoc`, sandbox, hidden frames, tracking pixels, password omission, and all export profiles. The `--extension` option additionally loads the built extension and checks both popup response formats through `chrome.debugger`; it requires a Chrome build supporting the experimental Extensions automation domain. This is separate from deterministic CI tests.
+
+For the opt-in Firefox iframe probe, build the Firefox package and run:
+
+```sh
+npm run build:firefox
+node scripts/probe-firefox-iframes.mjs
+```
+
+It temporarily installs a copy of the built helper in an isolated Firefox profile.
+The probe gives its temporary harness root-host access first, then all HTTP/HTTPS
+host access to exercise both coordinator modes; it does not prove the production activeTab gesture or native optional
+permission prompts. Desktop and Android manual checks remain necessary.
+
+## Desktop keyboard shortcuts
+
+On Chrome and Firefox Desktop, keyboard shortcuts run directly from the current page without opening the popup:
+
+| Action | Windows / Linux | macOS |
+| --- | --- | --- |
+| Preview & edit | `Alt+Shift+P` | `Option+Shift+P` |
+| Copy page context | `Alt+Shift+C` | `Option+Shift+C` |
+| Save to file | `Alt+Shift+S` | `Option+Shift+S` |
+| Select element | `Alt+Shift+E` | `Option+Shift+E` |
+
+Shortcuts use **saved preferences** (or defaults) and current organization policies. Preview, Copy and Save always capture the whole page; export a selected block through the picker panel. Copy keeps the source page focused. The extension icon briefly shows a check mark on success or `!` on failure; hover over it for details. Shortcut Save uses a temporary extension tab that closes after saving; keep it open until completion. Firefox requests download permission when needed. Repeated shortcuts are ignored while another shortcut action is running.
+
+Choose **Shortcuts** in the popup footer to change or remove assignments. Chrome opens `chrome://extensions/shortcuts`; Firefox opens its shortcut manager where supported, otherwise open the tools menu in `about:addons` and choose **Manage Extension Shortcuts**. Browser, operating-system and other extension shortcuts can conflict; check assignments if a key does nothing. Test your preferred keyboard layouts, especially when `Alt+Shift` switches input languages. Shortcut labels are not shown beside the action buttons.

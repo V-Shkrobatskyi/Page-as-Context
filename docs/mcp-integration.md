@@ -40,7 +40,8 @@ Do not configure HFS or a duplicate manual server when using a native plugin.
 2. Under **Helper connection**, click **Copy setup info**. Give that line to your
    AI app when asking it to connect Chrome or Firefox. It contains Browser,
    Instance and Extension ID. If the button is unavailable in an older extension,
-   expand **Setup and browser instance** and copy the line there.
+   expand **Setup and browser instance** and copy the line there. Firefox needs
+   the Gecko add-on ID from this line, not the UUID in its extension URL.
 3. The assistant checks setup and prepares a plan. Review its actual changes
    before approving local setup. Keep confirmation for `confirm_browser_setup`
    enabled. An existing compatible bridge can be reused; adding a browser can
@@ -88,7 +89,9 @@ The assistant obtains current Connection IDs itself; you do not copy them in nor
 actions and requires **Mode: Read and write** in MCP settings. Read only is the
 default. Browser/site permissions, privacy controls and organization policy
 still apply. Native text inputs, textareas, buttons, links, checkboxes and selects
-are supported; password/file/payment fields and unsupported custom controls are not.
+and narrowly eligible named, focusable div/span buttons are supported;
+password/file/payment fields and other custom controls are not. See
+[target restrictions](mcp-development.md#custom-button-clicks).
 
 Ask the assistant to describe the shared tab first. To test Write, use a harmless
 form and request one specific field change without submitting it. Review any
