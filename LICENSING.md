@@ -2,7 +2,7 @@
 
 Copyright (c) 2026 Vitalii Shkrobatskyi.
 
-Starting with the upcoming 1.3.0 release, the original code, documentation,
+The license transition was introduced for version 1.3.0. The original code, documentation,
 fixtures, and assets in this repository are licensed under the GNU General
 Public License version 3 only (`GPL-3.0-only`), except where separate notices
 identify third-party material. The full terms are in [LICENSE](LICENSE).

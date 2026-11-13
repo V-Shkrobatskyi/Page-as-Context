@@ -1,5 +1,9 @@
 # Page as Context for Claude
 
+For installation, updates and removal, use the [app package guide](PACKAGE-README.md).
+Current source package version: **1.2.7**. Build examples below use that version;
+dated acceptance records and release notes retain the versions actually tested.
+
 One private macOS Apple silicon integration for Claude Desktop and Claude Code. Both installation formats use the same source directory, server, helper, runtime and version. Client entry points retain independent credentials. Uses the shared MCP server,
 setup, broker and native transport in `helper/`; it contains no browser adapter
 or duplicate grant/permission implementation. See [the package user guide](PACKAGE-README.md).
@@ -13,9 +17,9 @@ official Node 24.10.0 macOS arm64 archive and pinned MCPB build tooling:
 npm ci --prefix integrations/claude --ignore-scripts
 node scripts/mcp/build-claude-package.mjs \
   --archive /path/to/node-v24.10.0-darwin-arm64.tar.gz \
-  --output 'artifacts/mcp/Claude 1.2.2 macOS arm64'
+  --output 'artifacts/mcp/Claude 1.2.7 macOS arm64'
 node scripts/mcp/check-claude-package.mjs \
-  'artifacts/mcp/Claude 1.2.2 macOS arm64/Page-as-Context-Claude-1.2.2-macOS-arm64.mcpb'
+  'artifacts/mcp/Claude 1.2.7 macOS arm64/Page-as-Context-Claude-1.2.7-macOS-arm64.mcpb'
 ```
 
 The archive's official Node checksum is verified before extraction. Output
@@ -80,13 +84,13 @@ and has not been submitted to a public directory.
 The same `package/` source includes `.claude-plugin/plugin.json` and `.mcp.json`.
 The Desktop entry point selects `--client desktop` by default; the Code manifest
 explicitly selects `--client code`. No model/tool argument selects identity.
-Both formats are version 1.2.2. A root `plugin.json` mirrors plugin identity for
+Both current source formats are version 1.2.7. A root `plugin.json` mirrors plugin identity for
 the common package inventory verifier; Desktop reads `manifest.json` instead.
 
 ```sh
 node scripts/mcp/build-chatgpt-package.mjs --client claude-code \
   --archive /private/tmp/node-v24.10.0-darwin-arm64.tar.gz \
-  --output 'artifacts/mcp/Claude 1.2.2 plugin macOS arm64'
+  --output 'artifacts/mcp/Claude 1.2.7 plugin macOS arm64'
 ```
 
 Check the extracted marketplace using its bundled `runtime/node` with
@@ -112,7 +116,7 @@ Pairing alone grants a new Native client no tab access. After approval choose
 shared. Manual mode uses **Connect selected tab**. Tab grants, Write, connection
 IDs and session approvals are never copied from the previous instance.
 
-## Aligned release 1.2.2
+## Historical aligned release 1.2.2
 
 This release aligns the four client package versions and ships the revised user
 guide inside each package, with web links that work outside the source checkout.

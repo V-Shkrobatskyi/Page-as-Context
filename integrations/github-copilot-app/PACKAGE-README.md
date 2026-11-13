@@ -7,7 +7,7 @@ Node is needed. Chrome core flow is verified; Firefox live use is untested.
 ## Install
 
 1. Download the **GitHub Copilot App** archive, for example
-   `Page-as-Context-GitHub-Copilot-App-1.2.5-macOS-arm64-plugin.zip`.
+   `Page-as-Context-GitHub-Copilot-App-1.2.7-macOS-arm64-plugin.zip`.
    Do not use either ChatGPT archive (`ChatGPT-...-plugin.zip` or
    `ChatGPT-...-marketplace.zip`); those contain a different catalog format.
    Unpack the Copilot ZIP into its own folder so it is not mixed with a

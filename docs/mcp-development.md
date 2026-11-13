@@ -132,7 +132,9 @@ post-action capture remains applied and reports an unavailable snapshot.
 
 Supported targets are native buttons/links, text inputs/textarea, checkboxes and
 native selects/options. Password, file and recognized credential/payment fields
-are excluded. Custom ARIA widgets, closed shadow roots, cross-origin action
+are excluded. Named visible div/span buttons with exact `role="button"` and
+explicit nonnegative tabindex are a narrow custom-control exception; see
+[custom button clicks](#custom-button-clicks). Other custom ARIA widgets, closed shadow roots, cross-origin action
 frames, transformed/clipped frame coordinate boundaries and stale, disabled or
 overlaid targets fail closed. Accessible same-origin frames and open shadow
 roots are checked at action time. Chrome pointer actions use CDP input, while
@@ -309,6 +311,8 @@ adapter addresses to targets actually shown. These refs identify controls but do
 not promise support for every action. The internal capture remains full; this
 feature bounds response size and does not claim faster browser capture.
 
+## Custom button clicks
+
 Custom clicks support named visible div/span elements with exact role=button and
 explicit nonnegative tabindex, excluding editable, disabled, inert, hidden and
 occluded elements. Other custom widgets remain unsupported. Decorative span/SVG
@@ -317,3 +321,104 @@ the same fixed eligibility/preflight; Chrome dispatches CDP pointer events and
 Firefox uses programmatic DOM clicks. A short observation window precedes the
 post-click full capture. Applied does not confirm async completion or persistence.
 A lost result can remain outcome-unknown; retries return receipts without replay.
+
+## Scoped post-fill responses
+
+Since 2.2.4, `fill_element` accepts optional `responseMode: "full" | "scoped"`; omission means
+`scoped`. Set `responseMode: "full"` to request the complete post-fill page.
+`scoped` still captures the whole permitted page internally and applies
+normal privacy/data controls and action-safe compression. It returns only the
+filled native text field, a structural summary of its immediate DOM parent and
+changed visible status/alert regions when the remaining sanitized semantics are
+unchanged. The parent is summarized by tag; its siblings/subtree are omitted.
+Unknown outside changes, replaced/filtered targets, incomplete captures, missing
+identity/parent information, navigation or bounds cause a full fallback.
+
+`snapshot.scope.kind` and `fallbackReason` describe the actual result. `omitted`,
+`parentSummaryOnly`, `relatedRegionRemoved` and `recovery` describe its limits.
+This is independent of `partial` and capture warnings. The scoped textual tool
+envelope has a conservative 16 KiB budget; comparison baselines are bounded to
+10,000 nodes and 512 KiB (conservative UTF-8 bound). Full fallback remains subject
+to the normal response policy limit. For scoped fill, a separate full internal capture obtains an operation-local
+privacy-filtered baseline immediately before mutation; the ordinary snapshot
+retains node identities/refs only. The baseline is released when the operation
+finishes and is never written to diagnostics or disk. This first version therefore
+uses two internal full captures around a scoped fill and optimizes model response
+size, not capture latency.
+
+Every action invalidates old refs. Scoped snapshots issue refs only for the
+returned controls; use `read_page_context` to reach fields outside that scope.
+A receipt of `applied` confirms action dispatch, not application persistence.
+The fixed 150 ms observation window does not confirm later asynchronous updates.
+After `snapshotUnavailable`, read again; never replay a write to refresh context.
+The same catalog and execution path serve native plugins and Local HTTP (HFS).
+Existing installed native plugin packages require the newly built helper catalog
+and a client tool refresh before they can advertise the optional argument.
+`click_element`, `select_option` and `set_checked` continue returning full context.
+
+## Grouped native writes
+
+`write_elements` accepts `connectionId`, a current `snapshotId`, one
+`operationId` and an explicit ordered `actions` list. Each item is a `fill`
+with `elementRef` and `text`, a `select-option` with `elementRef` and
+`optionRef`, or a `set-checked` with `elementRef` and boolean `checked`.
+All refs must come from the same visible snapshot. No clicks, submit,
+selectors, scripts, repeated targets or implicit extra actions are accepted.
+
+The model chooses the group size through that list. **Maximum actions per
+write call** defaults to 10 and accepts 1–10 in MCP Access and approval.
+`McpMaxActions` may impose a lower organization ceiling. The effective
+`maxActions` is returned by `get_connection_status` (0 for read-only access).
+A list above the effective limit is rejected before any action starts; it
+is never silently truncated or split into automatically continued groups.
+Text is limited to 10,000 UTF-16 units per value, 20,000 per group, and
+60,000 UTF-8 bytes for the compact arguments. One action per call remains
+available through either a one-item list or the existing single-action tools.
+
+Actions execute sequentially under one tab lock. The extension performs a
+sanitized preflight, rechecks authorization and identity before each dispatch,
+recaptures after approval and observes for 150 ms after each applied action.
+Changes outside the supported action effect/status regions, uncertain target
+identity, partial capture, errors or loss of access stop the group. Known
+dependencies should be separated into different calls. These checks cannot
+prove independence of hidden application state or predict later asynchronous
+changes. Website event handlers may themselves submit data or cause navigation.
+Per-action browser approval remains per action unless connection approval is
+already allowed. The existing 85-second browser request deadline bounds the
+whole group, including approvals; a long group can stop partway through.
+
+The response contains indexed `actions` receipts (`applied`, `rejected`,
+`not-started`, `outcome-unknown`), overall `status` (`applied`, `partial`,
+`rejected`, `outcome-unknown`), optional `stopReason`, and one final full
+snapshot when available. Receipts never echo submitted values; the sanitized
+snapshot uses ordinary form-value controls. `snapshotUnavailable` explicitly
+marks missing context. Applied is not a persistence guarantee; there is no
+rollback. After lost dispatch confirmation, read to inspect the state and
+never automatically replay the write under a new operation ID.
+
+All writes invalidate old public refs. Internal identity mappings are local
+to the group; final refs come from the returned snapshot only. Repeating the
+same operation ID and payload returns receipts without repeating actions or
+retaining page contents. Changing the payload under the same ID is rejected.
+Deduplication lasts only for the live grant; it is not a cross-restart
+exactly-once guarantee. Current native clients need a rebuilt helper catalog,
+and existing HFS installations need the updated relay for the write timeout.
+Installed packages are not updated by source changes. Grouped writes originally
+shipped separately from targeted reads; current clients can use
+`read_target_context` for exact discovery or `read_page_context` for the full page.
+
+## Empty values, input hints and masked text targets
+
+Known empty Chrome AX string values are preserved as `value=""`; an omitted
+value is not treated as empty. Firefox may expose `placeholder` separately for
+unnamed native inputs/textarea, without changing their accessible name. Hints
+pass the same privacy pipeline and target validation detects changed hints.
+Maximum falls back to the ordinary serializer when these hints are present.
+
+For ordinary textbox/searchbox targets with an unchanged visible name or hint
+and internal node identity, partial personal-value masking can retain the action
+ref. The value stays masked. Full hiding, excluded form values, redacted target
+labels/hints, secret controls and changed identity never gain this exception.
+A matched node whose ref was removed yields `target-filtered`; missing or
+ambiguous identities retain `target-replaced-or-filtered`. Applied is still not
+a claim that the application persisted the value.
