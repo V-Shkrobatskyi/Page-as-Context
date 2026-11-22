@@ -20,6 +20,8 @@ const actions = { 'preview-context': 'preview', 'copy-page-context': 'copy', 'sa
 
 /** Browser commands grant activeTab and keep capture independent of the popup lifetime. */
 export function installKeyboardShortcuts(journal: ReturnType<typeof installDiagnostics>, startPicker: StartPicker, restoreAction?: () => Promise<void>): void {
+  // Firefox Android has no commands API; continue initializing other background features.
+  if (!browser.commands?.onCommand?.addListener) return;
   let pending = false;
   const feedbackTimers = new Map<number, ReturnType<typeof setTimeout>>();
   async function feedback(tabId: number, message: string, success: boolean): Promise<void> {

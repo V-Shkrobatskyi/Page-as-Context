@@ -40,7 +40,7 @@ export function createPickerCoordinator() {
         const context = { ...preferences, policyRevision: snapshot.revision };
         await checkPolicy('picker', context);
         const platform = await browser.runtime.getPlatformInfo();
-        if (platform.os === 'android') throw new Error('Element selection is currently available on desktop only.');
+        const canSave = platform.os !== 'android';
         const tab = target ?? (await browser.tabs.query({ active: true, lastFocusedWindow: true }))[0];
         if (tab?.id === undefined || !tab.url || !/^https?:\/\//u.test(tab.url)) throw new Error('Open a regular HTTP or HTTPS page to select a block.');
         if (target) {
@@ -97,6 +97,7 @@ export function createPickerCoordinator() {
           try {
             await checkPolicy('picker', context);
             await checkPolicy(action, context);
+            if (action === 'save' && !canSave) throw new Error('Saving files is unavailable on Android.');
             if (action === 'save' && import.meta.env.BROWSER === 'firefox' &&
               !await browser.permissions.contains({ permissions: ['downloads'] })) {
               downloadsGranted = false;
@@ -152,7 +153,7 @@ export function createPickerCoordinator() {
           if (!message || typeof message !== 'object' || abort.signal.aborted) return;
           const data = message as { type?: string; operation?: string };
           const type = data.type;
-          if (type === 'ready' && !ready) { ready = true; session?.port?.postMessage({ type: 'active', previewAllowed: snapshot.policy.PreviewAllowed !== false, copyAllowed: snapshot.policy.ClipboardExportAllowed !== false, saveAllowed: snapshot.policy.FileExportAllowed !== false }); resolveReady(); }
+          if (type === 'ready' && !ready) { ready = true; session?.port?.postMessage({ type: 'active', previewAllowed: snapshot.policy.PreviewAllowed !== false, copyAllowed: snapshot.policy.ClipboardExportAllowed !== false, saveAllowed: canSave && snapshot.policy.FileExportAllowed !== false }); resolveReady(); }
           else if (type === 'cancel') session?.close();
           else if (type === 'capture') void capture('preview');
           else if (type === 'copy' || type === 'save') void capture(type);
@@ -165,7 +166,7 @@ export function createPickerCoordinator() {
           if (!message || message.type !== PICKER_SAVE_PERMISSION || message.token !== token) return;
           if (!ready || abort.signal.aborted || sender.id !== browser.runtime.id || sender.tab?.id !== tabId ||
             sender.frameId !== 0 || sender.url !== url || session?.documentId && sender.documentId !== session.documentId) return;
-          if (snapshot.policy.FileExportAllowed === false) { reply({ granted: false }); return; }
+          if (!canSave || snapshot.policy.FileExportAllowed === false) { reply({ granted: false }); return; }
           if (downloadsGranted) { reply({ granted: true }); return; }
           // Firefox preserves the content-script click gesture for runtime.onMessage.
           try {

@@ -303,9 +303,12 @@ describe('popup export flow', () => {
     expect(window.close).not.toHaveBeenCalled();
   });
 
-  it('hides the picker action on Android', async () => {
+  it('keeps the picker action available on Android', async () => {
     const android = await loadPopup({ ok: true }, { firefox: true, android: true });
-    expect(android.selectElement.hidden).toBe(true);
+    expect(android.selectElement.hidden).toBe(false);
+    expect(android.selectElement.disabled).toBe(false);
+    android.selectElement.click(); await settle();
+    expect(android.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'element-picker-start-v1' }));
   });
   it.each([{ firefox: false }, { firefox: true }, { firefox: true, android: true }])('opens Customize and dismisses the popup without changing privacy preferences: %j', async options => {
     const popup = await loadPopup(successfulCapture(), options);
@@ -645,7 +648,7 @@ describe('popup export flow', () => {
   });
 
   it('blocks Save on Android even if a downloads API stub is exposed', async () => {
-    const popup = await loadPopup(successfulCapture(), { firefox: true, android: true });
+    const popup = await loadPopup(successfulCapture(), { firefox: true, android: true, managedError: true });
     expect(document.body.dataset.platform).toBe('android');
     expect(popup.save.disabled).toBe(true);
     popup.save.click();

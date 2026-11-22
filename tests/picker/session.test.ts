@@ -186,9 +186,7 @@ describe('background-owned selection sessions', () => {
     expect(mocks.api.runtime.onConnect.listeners.size).toBe(0);
   });
 
-  it('blocks Android, privileged pages and unavailable redaction settings', async () => {
-    mocks.api.runtime.getPlatformInfo.mockResolvedValueOnce({ os: 'android' });
-    expect(await coordinator.start(preferences)).toMatchObject({ ok: false });
+  it('blocks privileged pages and unavailable redaction settings', async () => {
     mocks.api.tabs.query.mockResolvedValueOnce([{ id: 42, url: 'chrome://settings/' }]);
     expect(await coordinator.start(preferences)).toMatchObject({ ok: false });
     mocks.filters.mockRejectedValueOnce(new Error('Settings unavailable'));
@@ -220,4 +218,21 @@ it('blocks picker preview independently of copying and saving', async () => {
   active.onMessage.emit({ type: 'capture' });
   await vi.waitFor(() => expect(active.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'error', message: expect.stringContaining('Preview is disabled') })));
   expect(mocks.capture).not.toHaveBeenCalled(); expect(mocks.preview).not.toHaveBeenCalled();
+});
+
+it('allows Android selection and preview while refusing file saving and download permission', async () => {
+  vi.stubEnv('BROWSER', 'firefox');
+  mocks.api.runtime.getPlatformInfo.mockResolvedValue({ os: 'android' });
+  expect(await coordinator.start(preferences)).toEqual({ ok: true });
+  expect(active.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'active', previewAllowed: true, copyAllowed: true, saveAllowed: false }));
+  const reply = vi.fn();
+  mocks.api.runtime.onMessage.emit({ type: PICKER_SAVE_PERMISSION, token: active.name.slice(PICKER_PORT.length) }, active.sender, reply);
+  expect(reply).toHaveBeenCalledWith({ granted: false });
+  expect(mocks.api.permissions.request).not.toHaveBeenCalled();
+  active.onMessage.emit({ type: 'save' }); await flush();
+  expect(mocks.save).not.toHaveBeenCalled();
+  expect(mocks.capture).not.toHaveBeenCalled();
+  active.onMessage.emit({ type: 'capture' });
+  for (let i = 0; i < 5; i++) await flush();
+  expect(mocks.preview).toHaveBeenCalledWith(expect.objectContaining({ scope: 'selection' }), expect.any(AbortSignal));
 });

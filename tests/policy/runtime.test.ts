@@ -1,16 +1,33 @@
 // Copyright (c) 2026 Vitalii Shkrobatskyi
 // SPDX-License-Identifier: GPL-3.0-only
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ get: vi.fn(), localGet: vi.fn(), set: vi.fn(), listeners: new Set<(...args: any[]) => void>() }));
-vi.mock('wxt/browser', () => ({ browser: { storage: { managed: { get: mocks.get }, local: { get: mocks.localGet, set: mocks.set }, onChanged: {
+const mocks = vi.hoisted(() => ({ platform: vi.fn(), get: vi.fn(), localGet: vi.fn(), set: vi.fn(), listeners: new Set<(...args: any[]) => void>() }));
+vi.mock('wxt/browser', () => ({ browser: { runtime: { getPlatformInfo: mocks.platform }, storage: { managed: { get: mocks.get }, local: { get: mocks.localGet, set: mocks.set }, onChanged: {
   addListener: (fn: (...args: any[]) => void) => mocks.listeners.add(fn), removeListener: (fn: (...args: any[]) => void) => mocks.listeners.delete(fn),
 } } } }));
 import { checkPolicy, readPolicy, watchPolicy, captureOptions, assertSource } from '@/src/policy/runtime';
 import { loadRedactionSettings, saveRedactionSettings } from '@/src/redaction-settings';
+import { DEFAULT_DATA_CONTROLS } from '@/src/core/data-controls';
 const prefs = { format: 'markdown', compression: 'compact', redactSensitiveData: true } as const;
-beforeEach(() => { mocks.get.mockReset().mockResolvedValue({}); mocks.localGet.mockReset().mockResolvedValue({}); mocks.set.mockReset(); mocks.listeners.clear(); });
+beforeEach(() => { mocks.platform.mockReset().mockResolvedValue({ os: 'linux' }); mocks.get.mockReset().mockResolvedValue({}); mocks.localGet.mockReset().mockResolvedValue({}); mocks.set.mockReset(); mocks.listeners.clear(); });
 afterEach(() => vi.unstubAllEnvs());
 describe('managed storage enforcement', () => {
+  it('keeps Android capture available without calling unsupported managed storage, preserving personal controls', async () => {
+    vi.stubEnv('BROWSER', 'firefox');
+    mocks.platform.mockResolvedValue({ os: 'android' });
+    mocks.get.mockRejectedValue(new Error('Managed storage is not supported'));
+    mocks.localGet.mockResolvedValue({ 'data-controls-v1': { ...DEFAULT_DATA_CONTROLS, includeFormValues: false } });
+    const snapshot = await checkPolicy('capture');
+    expect(snapshot.dataControls?.includeFormValues).toBe(false);
+    expect(mocks.get).not.toHaveBeenCalled();
+  });
+  it.each(['linux', 'unknown'])('does not bypass failed managed reads on Firefox %s', async os => {
+    vi.stubEnv('BROWSER', 'firefox');
+    if (os === 'unknown') mocks.platform.mockRejectedValue(new Error('Platform unavailable'));
+    else mocks.platform.mockResolvedValue({ os });
+    mocks.get.mockRejectedValue(new Error('Managed storage is not supported'));
+    await expect(readPolicy()).rejects.toThrow('Unable to load organization policies');
+  });
   it('does not manufacture a revision on ordinary installations', async () => {
     expect(await readPolicy()).toEqual({ policy: expect.any(Object) });
     await expect(checkPolicy('copy', prefs)).resolves.toBeDefined();

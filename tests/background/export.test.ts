@@ -21,7 +21,7 @@ async function loadBackground(target = 'chrome') {
     tabs: { get: vi.fn().mockResolvedValue({ id: 42, url: 'https://example.test/' }), query: vi.fn().mockResolvedValue([{ id: 42, title: 'Synthetic', url: 'https://example.test/' }]) } };
   vi.stubGlobal('chrome', chromeApi);
   const firefoxApi = {
-    commands, storage,
+    commands: undefined, storage,
     runtime: { sendMessage: vi.fn(), getBrowserInfo: vi.fn().mockResolvedValue({ name: 'Firefox', version: '157.0' }), getPlatformInfo: vi.fn().mockResolvedValue({ os: 'android' }), id: 'synthetic-firefox-id', getURL: (path: string) => `moz-extension://test${path}`, onMessage: { addListener: (callback: typeof listener) => { listener = callback; } } },
     tabs: {
       query: vi.fn().mockResolvedValue([{ id: 42, url: 'https://example.test/' }]),
@@ -218,6 +218,7 @@ describe('enterprise capture boundary', () => {
   });
   it.each(['chrome', 'firefox'])('applies mandatory corporate rules and returns a revision in %s', async target => {
     const background = await loadBackground(target);
+    background.firefoxApi.runtime.getPlatformInfo.mockResolvedValue({ os: 'linux' });
     background.storage.managed.get.mockResolvedValue({ ManagedRedactionRules: [{ id: 'company', name: 'Company', type: 'text', text: 'Acme', enabled: true, caseSensitive: false }] });
     const result = { ok: true, tree: { schemaVersion: 1, root: { role: 'page', children: [{ role: 'StaticText', name: 'Acme', children: [] }] } } };
     capture.mockResolvedValue(result);
@@ -247,6 +248,7 @@ describe('enterprise capture boundary', () => {
 
 it.each(['chrome', 'firefox'])('enforces both forced-on and forced-off built-ins at the %s capture boundary', async target => {
   const background = await loadBackground(target);
+  background.firefoxApi.runtime.getPlatformInfo.mockResolvedValue({ os: 'linux' });
   background.storage.managed.get.mockResolvedValue({ RequiredBuiltinFilters: ['email-hide'], DisabledBuiltinFilters: ['authorization'] });
   const result = { ok: true, tree: { schemaVersion: 1, root: { role: 'page', children: [{ role: 'StaticText', name: 'person@example.test Bearer abcdefghijklmnop', children: [] }] } } };
   capture.mockResolvedValue(result); background.firefoxApi.scripting.executeScript.mockResolvedValue([{ frameId: 0, result }]);
@@ -264,4 +266,12 @@ it('applies mandatory data exclusions and sends only source rules to the capture
   expect(JSON.stringify(response)).not.toContain('PRIVATE-'); expect(JSON.stringify(response)).not.toContain('private.test');
   expect(capture.mock.calls[0]![3].sources).not.toHaveProperty('RequiredBuiltinFilters');
   expect(response).toHaveProperty('operationId', expect.stringMatching(/^[0-9a-f-]{36}$/));
+});
+
+it('starts Android background without commands and captures despite unsupported managed storage', async () => {
+  const background = await loadBackground('firefox');
+  background.storage.managed.get.mockRejectedValue(new Error('Managed storage is not supported'));
+  const response = await background.request({ type: 'capture-active-tab', compression: 'compact', format: 'semantic-text', redactSensitiveData: true });
+  expect(response.ok).toBe(true);
+  expect(background.storage.managed.get).not.toHaveBeenCalled();
 });

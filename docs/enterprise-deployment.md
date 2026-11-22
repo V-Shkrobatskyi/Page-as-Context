@@ -8,7 +8,7 @@ No application server, extension account, or company-specific build is required.
 
 The implementation targets Chrome Desktop and Firefox Desktop. Automated tests cover policy evaluation, operation boundaries, UI state, and browser packaging. The supplied platform templates require a pilot on your actual managed browser and OS before production rollout. Real GPO, MDM, Google Admin, Linux and Firefox deployment checks are not certified by unit tests. See the [manual checklist](../tests/manual/enterprise-policies.md).
 
-Firefox Android remains supported for ordinary extension use. Enterprise policy delivery on Android is not claimed. If a browser does not expose managed storage, the extension uses its ordinary mode. An empty policy set also uses ordinary mode. A failed read on a supported API blocks capture and export until a successful retry. Firefox's explicit `Managed storage manifest not found` response means no policy configuration, rather than a storage failure.
+Firefox Android remains supported for ordinary extension use. Its managed storage API is unsupported, so the extension skips that API on a confirmed Android platform while retaining personal filters and data controls. Enterprise policy delivery on Android is not claimed. If a browser does not expose managed storage, the extension uses its ordinary mode. An empty policy set also uses ordinary mode. A failed read on a supported API blocks capture and export until a successful retry. Firefox's explicit `Managed storage manifest not found` response means no policy configuration, rather than a storage failure.
 
 ## Policy reference
 

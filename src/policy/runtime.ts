@@ -24,7 +24,11 @@ export interface PolicyContext extends ExportPreferences { operationId?: string;
 export async function readPolicy(includePersonal = true): Promise<PolicySnapshot> {
   let raw: unknown = {};
   try {
-    if (browser.storage?.managed?.get) raw = await browser.storage.managed.get(null);
+    // Firefox Android exposes managed storage methods but rejects every call.
+    // Skip only on a confirmed unsupported platform; desktop failures remain blocking.
+    const platform = import.meta.env.BROWSER === 'firefox'
+      ? await browser.runtime?.getPlatformInfo?.().catch(() => undefined) : undefined;
+    if (platform?.os !== 'android' && browser.storage?.managed?.get) raw = await browser.storage.managed.get(null);
   } catch (error) {
     // Firefox reports an absent native manifest this way on ordinary installations.
     if (!(import.meta.env.BROWSER === 'firefox' && error instanceof Error && error.message === 'Managed storage manifest not found')) {

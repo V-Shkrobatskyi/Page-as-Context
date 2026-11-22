@@ -561,13 +561,11 @@ async function initializeFirefoxPlatform(): Promise<void> {
     ]);
     const android = platform?.os === 'android' || /Android/u.test(navigator.userAgent);
     document.body.dataset.platform = android ? 'android' : 'desktop';
-    selectElementButton.hidden = android;
     canSave = !android && ['mac', 'win', 'linux', 'cros', 'openbsd'].includes(platform?.os ?? '')
       && typeof browser.permissions?.request === 'function';
   } catch {
     // Copy remains available if local platform detection fails.
     document.body.dataset.platform = /Android/u.test(navigator.userAgent) ? 'android' : 'desktop';
-    selectElementButton.hidden = document.body.dataset.platform === 'android';
   } finally {
     clearTimeout(timer);
     updateSaveAvailability();
