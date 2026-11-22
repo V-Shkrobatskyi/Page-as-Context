@@ -97,6 +97,11 @@ adding a pattern requires updating the marker check and its regression cases.
 `prepareExport` applies Maximum encoding only to the already-redacted Compact tree.
 It preserves every exported node occurrence, field, explicit state and child order.
 Adapter IDs are not exported. Header placement and clipboard boundaries retain existing behavior.
+Placeholders, accessible descriptions and inline errors remain quoted literal
+attributes. They participate in subtree signatures and prevent attribute-free
+chain/inline shorthand, without disabling packing for the whole page. Action
+references still require the ordinary serializer; MCP Write keeps its separate
+action-safe compression fallback.
 Attribution uses the package version, the selected compression index times two
 plus the privacy flag (`0`–`7`), and the author `V. Shkrobatskyi`. Direct serializers
 without export settings include the version only. Maximum fallback retains the
