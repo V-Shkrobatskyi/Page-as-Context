@@ -1,7 +1,7 @@
 # ChatGPT desktop plugin
 
 For installation, updates and removal, use the [app package guide](PACKAGE-README.md).
-Current source package version: **1.2.7**. Build examples below use that version;
+Current source package version: **1.2.8**. Build examples below use that version;
 dated acceptance records and release notes retain the versions actually tested.
 
 The package contains Chrome/Firefox MCP servers, a pinned Node runtime, locked
@@ -23,7 +23,7 @@ the upload-compatible package. No Swift application is built. End users do not n
 ```sh
 node scripts/mcp/build-chatgpt-package.mjs \
   --archive /path/to/node-v24.10.0-darwin-arm64.tar.gz \
-  --output 'artifacts/mcp/ChatGPT plugin 1.2.7'
+  --output 'artifacts/mcp/ChatGPT plugin 1.2.8'
 ```
 
 The default version comes from `package/plugin.json`. The output contains
@@ -38,9 +38,9 @@ submitted to a public directory.
 ## Verify the installed copy
 
 ```sh
-'artifacts/mcp/ChatGPT plugin 1.2.7/marketplace/plugins/page-as-context/runtime/node' \
+'artifacts/mcp/ChatGPT plugin 1.2.8/marketplace/plugins/page-as-context/runtime/node' \
   scripts/mcp/check-chatgpt-package.mjs \
-  'artifacts/mcp/ChatGPT plugin 1.2.7/marketplace'
+  'artifacts/mcp/ChatGPT plugin 1.2.8/marketplace'
 node scripts/mcp/inspect-chatgpt-package.mjs \
   "$HOME/.page-as-context/chatgpt/.agents/plugins/marketplace.json"
 ```

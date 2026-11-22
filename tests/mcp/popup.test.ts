@@ -3,16 +3,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import { readFileSync } from 'node:fs';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
-const fixture = vi.hoisted(() => ({ send: vi.fn(), permission: vi.fn(), listeners: new Set<any>() }));
+const fixture = vi.hoisted(() => ({ platform: vi.fn(), send: vi.fn(), permission: vi.fn(), listeners: new Set<any>() }));
 vi.mock('wxt/browser', () => ({ browser: {
-  runtime: { id: 'test', sendMessage: fixture.send, onMessage: { addListener: (fn: any) => fixture.listeners.add(fn), removeListener: (fn: any) => fixture.listeners.delete(fn) } },
+  runtime: { getPlatformInfo: fixture.platform, id: 'test', sendMessage: fixture.send, onMessage: { addListener: (fn: any) => fixture.listeners.add(fn), removeListener: (fn: any) => fixture.listeners.delete(fn) } },
   permissions: { request: fixture.permission },
 } }));
 import { installMcpPopup } from '@/src/mcp/popup';
 const state = () => ({ ok: true, automatic: true, enabled: true, paused: false, mode: 'read', writeAllowed: true, validTab: true, sourceId: 'synthetic_source_001',
   transport: 'ready', shares: [{ mode: 'read' }], clients: [{ id: 'synthetic_client_001', name: 'Test AI' }], pending: [] });
 beforeEach(() => {
-  vi.stubEnv('BROWSER', 'chrome'); fixture.send.mockReset(); fixture.permission.mockReset().mockResolvedValue(true); fixture.listeners.clear();
+  vi.stubEnv('BROWSER', 'chrome'); fixture.platform.mockReset().mockResolvedValue({ os: 'linux' }); fixture.send.mockReset(); fixture.permission.mockReset().mockResolvedValue(true); fixture.listeners.clear();
   const source = readFileSync('entrypoints/popup/main.ts', 'utf8');
   const control = source.match(/<button id="mcp-connect"[^\n]+/u)![0];
   const menu = source.match(/<div id="ai-control"[^\n]+/u)![0];
@@ -113,4 +113,15 @@ it.each([true, false])('shows the original Connect MCP icon button when MCP is d
   expect(document.querySelector('#mcp-connect svg')).not.toBeNull();
   expect(document.querySelector('#mcp-connect')!.textContent).toBe('Connect MCP');
   expect((document.querySelector('#mcp-connect') as HTMLButtonElement).title).toBe('Open MCP settings');
+});
+
+it('disables the visible MCP button on Firefox Android without contacting the controller', async () => {
+  vi.stubEnv('BROWSER', 'firefox');
+  fixture.platform.mockResolvedValue({ os: 'android' });
+  installMcpPopup();
+  await vi.waitFor(() => expect((document.querySelector('#mcp-connect') as HTMLButtonElement).disabled).toBe(true));
+  expect((document.querySelector('#mcp-connect') as HTMLElement).hidden).toBe(false);
+  expect((document.querySelector('#ai-control') as HTMLElement).hidden).toBe(true);
+  expect((document.querySelector('#ai-details') as HTMLElement).hidden).toBe(true);
+  expect(fixture.send).not.toHaveBeenCalled();
 });

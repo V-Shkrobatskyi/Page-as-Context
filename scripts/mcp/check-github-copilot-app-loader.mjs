@@ -1,3 +1,4 @@
+import { toolCatalog } from '../../helper/src/catalog.mjs';
 // Copyright (c) 2026 Vitalii Shkrobatskyi; SPDX-License-Identifier: GPL-3.0-only
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile, readdir } from 'node:fs/promises';
@@ -56,7 +57,10 @@ try {
     const tools = await session.rpc.mcp.listTools({ serverName });
     assert.ok(tools.tools.some(tool => tool.name === toolName));
     if (values.probe) assert.deepEqual(tools.tools.map(tool => tool.name), ['loader_probe']);
-    else assert.equal(tools.tools.length, 10);
+    else {
+      assert.equal(tools.tools.length, toolCatalog().length + 5);
+      assert.ok(tools.tools.some(tool => tool.name === 'write_elements'));
+    }
   }
   await session.rpc.tools.initializeAndValidate();
   const metadata = await session.rpc.tools.getCurrentMetadata();

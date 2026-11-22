@@ -1,3 +1,4 @@
+import { toolCatalog } from '../../helper/src/catalog.mjs';
 // Copyright (c) 2026 Vitalii Shkrobatskyi; SPDX-License-Identifier: GPL-3.0-only
 import assert from 'node:assert/strict';
 import { checkProfileSwitch } from './check-profile-switch.mjs';
@@ -85,7 +86,8 @@ try {
       assert.match(client.getInstructions(), /supports Chrome and Firefox together/u);
       assert.match(client.getInstructions(), /explicit user approval before confirm_browser_setup/u);
       const initialTools = (await client.listTools()).tools;
-      assert.equal(initialTools.length, 20);
+      assert.equal(initialTools.length, 2 * (toolCatalog().length + 5));
+      for (const route of ['chrome', 'firefox']) assert.ok(initialTools.some(tool => tool.name === `${route}_write_elements`));
       assert.ok(initialTools.some(tool => tool.name === 'chrome_setup_status'));
       assert.ok(initialTools.some(tool => tool.name === 'firefox_setup_status'));
       const call = async (name, args = {}) => JSON.parse((await client.callTool({ name: `${browser}_${name}`, arguments: args })).content[0].text);

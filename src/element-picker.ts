@@ -111,7 +111,7 @@ export function installElementPicker(doc: Document, token: string, channel: Pick
     button('copy').disabled = busy || !valid(selected) || !copyAllowed;
     button('copy').title = copyAllowed ? 'Copy the selected element context' : 'Copying is disabled by your administrator.';
     button('save').disabled = busy || !valid(selected) || !saveAllowed;
-    button('save').title = saveAllowed ? 'Save the selected element context' : 'File export is disabled by your administrator.';
+    button('save').title = saveAllowed ? 'Save the selected element context' : 'File export is unavailable on this platform or restricted by your administrator.';
     schedule();
   };
   const choose = (element: Element) => {

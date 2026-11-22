@@ -1,0 +1,19 @@
+{
+  "PolicyVersion": 1,
+  "RedactionMode": "force-on",
+  "FileExportAllowed": false,
+  "ClipboardExportAllowed": true,
+  "PreviewAllowed": true,
+  "FilterSettingsAllowed": true,
+  "ManagedRedactionRules": [
+    {
+      "id": "pilot-project-name",
+      "name": "Pilot project name",
+      "type": "text",
+      "text": "SYNTHETIC_PROJECT_NAME",
+      "caseSensitive": false,
+      "enabled": true
+    }
+  ],
+  "UserRedactionRulesAllowed": false
+}

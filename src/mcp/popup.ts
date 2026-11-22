@@ -23,6 +23,13 @@ export function installMcpPopup() {
   let aiTransports: { nativeEnabled?: boolean; hfs?: { enabled: boolean; endpoint: string } } | undefined;
   async function loadAi() {
     try {
+      if (import.meta.env.BROWSER === 'firefox' && (await browser.runtime.getPlatformInfo()).os === 'android') {
+        mcpConnect!.hidden = false; mcpConnect!.disabled = true;
+        mcpConnect!.title = 'MCP integration is available on desktop only.';
+        mcpConnect!.setAttribute('aria-label', mcpConnect!.title);
+        aiControl.hidden = true; aiDetails.hidden = true;
+        return;
+      }
       const state = await aiRequest('popup-read'); if (aiDisposed || aiBusy) return;
       aiSourceId = state.sourceId;
       aiTransports = state.transports;

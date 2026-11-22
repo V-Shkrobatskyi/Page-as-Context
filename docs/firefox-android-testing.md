@@ -1,13 +1,13 @@
 # Firefox Android verification
 
 Build and temporarily install the shared Firefox package on a connected Android
-device, then use the checklist below to verify Copy, settings and popup usability.
+device, then use the checklist below to verify Copy, Preview, element selection, settings and popup usability.
 Record the browser and Android versions, device model, build revision and results
 in the release PR or a separate verification report.
 
 ## Supported behavior
 
-Firefox Android supports Copy only; Save is unavailable because its downloads API
+Firefox Android supports whole-page and selected-element capture, Preview/edit and Copy; Save is unavailable because its downloads API
 is unsupported. Platform setup and compatibility are described in Mozilla's
 [Android development guide](https://extensionworkshop.com/documentation/develop/developing-extensions-for-firefox-for-android/).
 
@@ -16,6 +16,11 @@ Desktop Save. Android never requests that permission or calls downloads APIs.
 The popup explicitly detects Android and keeps Save unavailable even if a
 browser exposes a downloads stub. Copy, formats, compression and privacy settings
 use the same pipeline as Desktop.
+
+Verify **Select** by tapping a block, adjusting with **Select parent** or **Back**,
+then opening **Preview & edit** or using **Copy context**. Confirm that only the
+selected block is exported and picker Save stays disabled without permission
+prompts. The desktop-only **Connect MCP** button remains visible but disabled.
 
 ## Shared popup layout
 

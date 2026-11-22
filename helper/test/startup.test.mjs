@@ -155,7 +155,8 @@ test('MCP initialize succeeds before broker startup; first discovery starts it l
   assert.equal(await absent(config.socket), true);
   const discovered = (await client.listTools()).tools.map(tool => tool.name);
   assert.ok(discovered.includes('read_page_context'));
-  assert.ok(!discovered.includes('click_element')); // No browser authorization is available yet.
+  assert.ok(discovered.includes('click_element')); // Discovery is stable before browser authorization.
+  assert.ok(discovered.includes('write_elements'));
   const unavailable = await client.callTool({ name: 'read_page_context', arguments: { connectionId: 'synthetic_connection_001' } });
   assert.equal(unavailable.isError, true);
   await brokerReady(config);

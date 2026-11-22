@@ -111,3 +111,8 @@ it('restores the current MCP toolbar state after temporary shortcut feedback', a
   await vi.advanceTimersByTimeAsync(8000);
   expect(restore).toHaveBeenCalledOnce();
 });
+
+it('does not interrupt background initialization when the commands API is absent', () => {
+  mocks.api.commands = undefined;
+  expect(() => installKeyboardShortcuts(journal as any, picker)).not.toThrow();
+});

@@ -92,7 +92,7 @@ SPDX-License-Identifier: GPL-3.0-only
     </nav>
     <main class="page-main prose">
       <h1>Privacy policy for Page as Context</h1>
-      <p>Last updated: 2026-11-12. Applies to version 2.2.7.</p>
+      <p>Last updated: 2026-11-22. Applies to version 2.2.8.</p>
       <h2>Optional Local HTTP (HFS)</h2>
       <p>Local HTTP is separately opt-in and defaults off. It relays authorized MCP requests and sanitized results through a dedicated HFS process on 127.0.0.1 and the saved port. HFS and the generated executable JavaScript in config.yaml are trusted local components and can see relayed credentials and content. The extension never downloads or executes JavaScript from HFS responses.</p>
       <p>Provider secrets, independent client secrets and names are stored in browser-local extension storage. Private YAML contains the provider secret; client exports contain only their own bearer. Revoke/reset remove browser state; remove exported files, HFS config, backups and AI-client settings separately. HFS creates runtime files, but the relay never persists page queues or request/response content. Generated config disables access/error logs; process output needs separate retention controls. Diagnostics exclude secrets, headers, titles and URLs. Firefox transmission consent also applies to HTTP. The AI client may forward results under its provider policies.</p>
@@ -113,7 +113,7 @@ SPDX-License-Identifier: GPL-3.0-only
         </section>
         <section aria-labelledby="temporary-data">
           <h3 id="temporary-data">Temporary data</h3>
-          <p>Captured content is processed temporarily, without a persistent page archive. Memory reclamation depends on runtime/browser cleanup. Desktop element selections end on cancellation, navigation, disconnection or after five minutes. They are not saved as site rules or history records; optional history records only the metadata described below. Accessible names may include labels outside the selected block.</p>
+          <p>Captured content is processed temporarily, without a persistent page archive. Memory reclamation depends on runtime/browser cleanup. Element selections end on cancellation, navigation, disconnection or after five minutes. They are not saved as site rules or history records; optional history records only the metadata described below. Accessible names may include labels outside the selected block.</p>
           <p>Preview keeps original text and edits in tab memory, not in preview URLs. Closing or reloading loses the draft. Manual edits are not checked for sensitive data. Opening Preview does not copy anything; Copy requires your action. Filter test samples/results stay in the settings tab and are not saved.</p>
         </section>
         <section aria-labelledby="history-diagnostics">
@@ -145,7 +145,7 @@ SPDX-License-Identifier: GPL-3.0-only
         <h2 id="permissions">Permissions</h2>
         <ul>
           <li><strong>Chrome debugger:</strong> temporarily reads the active page and eligible frames after an export or authorized MCP request, checks frame visibility/password input types, and performs explicitly approved MCP interactions before detaching. MCP also resolves selected/shared-tab metadata through this existing API without attaching; other targets are not exposed to clients.</li>
-          <li><strong>activeTab and scripting:</strong> provide temporary page access and the on-demand Desktop element picker. Firefox also uses them for page/frame capture and approved MCP interactions through fixed isolated-world operations.</li>
+          <li><strong>activeTab and scripting:</strong> provide temporary page access and the on-demand element picker. Firefox also uses them for page/frame capture and approved MCP interactions through fixed isolated-world operations.</li>
           <li><strong>Firefox optional site access:</strong> Include frames from other sites is off by default. Enabling requests access to all HTTP/HTTPS sites. Access persists across tabs/restarts; switching off revokes it, including earlier individual grants. Ordinary capture requires Copy, Preview or Desktop Save; MCP capture requires a separately authorized connection. Protected frames may remain unavailable.</li>
           <li><strong>clipboardWrite:</strong> copies your requested export.</li>
           <li><strong>downloads:</strong> saves requested files on Desktop. Firefox asks for this optional permission on Save; Android never requests it.</li>

@@ -12,6 +12,7 @@ type Format = 'semantic-text' | 'markdown';
 const STATES: readonly (keyof NodeStates)[] = [
   'checked', 'selected', 'expanded', 'disabled', 'required', 'focusable', 'readOnly', 'focused',
 ];
+const SUPPORTING_FIELDS = ['placeholder', 'description', 'errorMessage'] as const;
 const LEGEND = 'Encoding: quoted text is literal; attributes are key=value; indentation shows hierarchy.';
 const STRINGS = 'Strings: unquoted A-Z in name/value/href slots refer to the definitions below; quoted text is literal.';
 const CHAINS = 'Chains: cell+link NAME means cell NAME containing link NAME; indented children belong to the link.';
@@ -41,7 +42,11 @@ interface Measure { characters: number; cost: number }
 export function serializeMaximum(tree: SemanticTree, format: Format, attribution = renderExportAttribution(), presentation: ExportPresentation = {}): SerializedContext {
   const fallback = () => format === 'semantic-text' ? serializeSemanticText(tree, attribution, presentation) : serializeMarkdown(tree, attribution, presentation);
   const pending = [tree.root];
-  while (pending.length) { const node = pending.pop()!; if (node.actionRef || node.placeholder !== undefined || node.description !== undefined || node.errorMessage !== undefined) return fallback(); pending.push(...node.children); }
+  while (pending.length) {
+    const node = pending.pop()!;
+    if (node.actionRef) return fallback();
+    pending.push(...node.children);
+  }
   const analysis = analyze(tree.root);
   if (!analysis) return fallback();
   const baseline = format === 'semantic-text' ? measureSemanticTextEncoding(tree, attribution, presentation) : measureMarkdownEncoding(tree, attribution, presentation);
@@ -139,6 +144,7 @@ function analyze(root: SemanticNode): Analysis | undefined {
 // IDs are adapter bookkeeping, not exported fields. Explicit exported attributes forbid shorthand.
 function plain(node: SemanticNode): boolean {
   return node.value === undefined && node.href === undefined && node.level === undefined
+    && SUPPORTING_FIELDS.every(key => node[key] === undefined)
     && STATES.every(key => node.states?.[key] === undefined);
 }
 
@@ -274,6 +280,9 @@ function fields(node: SemanticNode, dictionary: Dictionary): string {
   const role = dictionary.roles.get(node.role) ?? node.role;
   const output = [SAFE_ROLE.test(role) ? role : `role=${quote(role)}`];
   if (node.name !== undefined) output.push(literal(node.name, dictionary));
+  // Keep supporting text literal; string references are limited to name/value/href.
+  // fields() also defines template signatures and their measured rendering cost.
+  for (const key of SUPPORTING_FIELDS) if (node[key] !== undefined) output.push(`${key}=${quote(node[key])}`);
   if (node.value !== undefined) output.push(`value=${literal(node.value, dictionary)}`);
   for (const key of STATES) if (node.states?.[key] !== undefined) {
     output.push(`${key === 'readOnly' ? 'readonly' : key}=${node.states[key]}`);

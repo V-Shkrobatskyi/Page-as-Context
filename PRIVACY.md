@@ -1,6 +1,6 @@
 # Privacy policy for Page as Context
 
-Last updated: 2026-11-12. Applies to version 2.2.7.
+Last updated: 2026-11-22. Applies to version 2.2.8.
 
 ## Purpose and local processing
 
@@ -27,7 +27,7 @@ The extension persists your compression, format, and privacy preferences in brow
 
 Preview holds the prepared context, its initial text for Reset, and your edits only in the editor tab's memory. The extension does not persist drafts or put captured text in preview URLs. Closing or reloading the tab loses the draft. Manual edits are not automatically checked for sensitive data. Opening a preview does not write to the clipboard; Copy does so only when you choose it.
 
-Desktop Select element keeps one temporary element reference and an opaque marker on the chosen page during selection and export. The choice is not saved as a site rule or browsing record. The session ends on cancellation, navigation, disconnection, or after five minutes. Chrome uses temporary DOM descriptions to identify the chosen block and filters its bounded accessibility snapshot before export; Firefox captures the chosen DOM subtree. Accessible names can include labels outside the chosen block. Existing redaction settings apply before copying, saving, or opening Preview.
+Select element keeps one temporary element reference and an opaque marker on the chosen page during selection and export. The choice is not saved as a site rule or browsing record. The session ends on cancellation, navigation, disconnection, or after five minutes. Chrome uses temporary DOM descriptions to identify the chosen block and filters its bounded accessibility snapshot before export; Firefox captures the chosen DOM subtree. Accessible names can include labels outside the chosen block. Existing redaction settings apply before copying, saving, or opening Preview.
 
 Redaction filter settings, including custom literal text, are stored in browser-local extension storage when you choose Save filters. Sample text and test results stay only in the settings tab and are not saved. Filter JSON exports contain your custom text; review them before sharing. Filters are not automatically synchronized or downloaded from external lists.
 
@@ -110,7 +110,7 @@ If you email a bug report or post a GitHub issue, the recipient/service receives
 ## Permissions
 
 - Chrome debugger: briefly reads the active page and eligible embedded documents after an export action or authorized MCP request, checks frame visibility and password input types, and detaches afterward. MCP also uses this existing API to resolve metadata for a selected/shared tab when activeTab access ends, without attaching; other targets are not exposed to MCP clients.
-- activeTab and scripting: obtain temporary page access and install the Desktop element picker on demand in both browsers. Firefox also uses these permissions to capture the current page and permitted embedded documents.
+- activeTab and scripting: obtain temporary page access and install the element picker on demand in both browsers. Firefox also uses these permissions to capture the current page and permitted embedded documents.
 - Firefox optional site access: Include frames from other sites is off by default. Enabling it requests access to all HTTP/HTTPS websites in one browser prompt. The permission persists across tabs and browser restarts; turning the option off removes site access, including earlier individual host grants. Ordinary capture follows an explicit Copy, Preview or Desktop Save action; authorized MCP reads follow the separately granted connection. Protected frames may remain unavailable.
 - clipboardWrite: writes the export you request to your clipboard.
 - downloads (Desktop only): saves the export you request as a local file. In Firefox, this permission is optional and requested when you click Save; Android never requests it.
