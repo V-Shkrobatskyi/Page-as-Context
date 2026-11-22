@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PayloadContent</key>
+	<array>
+		<dict>
+			<key>PayloadContent</key>
+			<dict>
+				<key>com.google.Chrome.extensions.REPLACE_WITH_CHROME_EXTENSION_ID</key>
+				<dict>
+					<key>Forced</key>
+					<array>
+						<dict>
+							<key>mcx_preference_settings</key>
+							<dict>
+								<key>PolicyVersion</key>
+								<integer>1</integer>
+								<key>RedactionMode</key>
+								<string>force-on</string>
+								<key>FileExportAllowed</key>
+								<false/>
+								<key>ClipboardExportAllowed</key>
+								<true/>
+								<key>PreviewAllowed</key>
+								<true/>
+								<key>FilterSettingsAllowed</key>
+								<true/>
+								<key>ManagedRedactionRules</key>
+								<array>
+									<dict>
+										<key>id</key>
+										<string>pilot-project-name</string>
+										<key>name</key>
+										<string>Pilot project name</string>
+										<key>type</key>
+										<string>text</string>
+										<key>text</key>
+										<string>SYNTHETIC_PROJECT_NAME</string>
+										<key>caseSensitive</key>
+										<false/>
+										<key>enabled</key>
+										<true/>
+									</dict>
+								</array>
+								<key>UserRedactionRulesAllowed</key>
+								<false/>
+							</dict>
+						</dict>
+					</array>
+				</dict>
+			</dict>
+			<key>PayloadEnabled</key>
+			<true/>
+			<key>PayloadIdentifier</key>
+			<string>org.page-as-context.tutorial-pilot.preferences</string>
+			<key>PayloadType</key>
+			<string>com.apple.ManagedClient.preferences</string>
+			<key>PayloadUUID</key>
+			<string>04029E27-4A65-49ED-AB7A-E302A80BE65C</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+		</dict>
+	</array>
+	<key>PayloadDisplayName</key>
+	<string>Page as Context — tutorial pilot</string>
+	<key>PayloadDescription</key>
+	<string>Tutorial pilot: require redaction, hide a synthetic project name, and disable file exports for the selected Chrome extension.</string>
+	<key>PayloadIdentifier</key>
+	<string>org.page-as-context.tutorial-pilot</string>
+	<key>PayloadRemovalDisallowed</key>
+	<false/>
+	<key>PayloadScope</key>
+	<string>System</string>
+	<key>PayloadType</key>
+	<string>Configuration</string>
+	<key>PayloadUUID</key>
+	<string>184306F1-47B2-4DEC-A6A4-5BF1724B1444</string>
+	<key>PayloadVersion</key>
+	<integer>1</integer>
+</dict>
+</plist>
