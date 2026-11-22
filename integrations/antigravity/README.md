@@ -1,7 +1,7 @@
 # Page as Context for Google Antigravity
 
 For installation, updates and removal, use the [app package guide](PACKAGE-README.md).
-Current source package version: **1.2.7**. Build examples below use that version;
+Current source package version: **1.2.8**. Build examples below use that version;
 dated acceptance records and release notes retain the versions actually tested.
 
 Experimental local plugin for macOS Apple silicon. The initial acceptance target
@@ -24,7 +24,7 @@ locked helper production dependencies:
 ```sh
 node scripts/mcp/build-antigravity-package.mjs \
   --archive /private/tmp/node-v24.10.0-darwin-arm64.tar.gz \
-  --output 'artifacts/mcp/Antigravity 1.2.7 macOS arm64'
+  --output 'artifacts/mcp/Antigravity 1.2.8 macOS arm64'
 ```
 
 Output directories must be new. The shared builder checks the Node archive hash,

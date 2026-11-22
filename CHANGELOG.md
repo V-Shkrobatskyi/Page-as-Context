@@ -19,13 +19,24 @@ and artifact details belong in the linked GitHub Release.
 | [1.0.1](https://github.com/V-Shkrobatskyi/Page-as-Context/releases/tag/v1.0.1) | 2026-10-11 | Firefox XPI, submission ZIP and sources |
 | [1.0.0](https://github.com/V-Shkrobatskyi/Page-as-Context/releases/tag/v1.0.0) | 2026-10-11 | Chrome ZIP |
 
-Version 2.2.7 is dated for immediate release preparation; its GitHub publication
-is pending. This table is not a list of store versions. The 1.0.0 release
+This table is not a list of store versions. The 1.0.0 release
 notes confirm Chrome Web Store distribution; 1.0.1 confirms Mozilla Add-ons
 publication while Chrome remained on 1.0.0. Those notes do not establish exact
 store publication timestamps. Later store rollout dates must be recorded separately.
 
 ## Version changes
+
+### 2.2.8 — unreleased
+
+- Restore capture and preview on Firefox Android by guarding the unavailable keyboard commands API during background startup and skipping its unsupported managed storage API while retaining personal data controls and desktop policy enforcement. Show the desktop-only MCP button as disabled on Android and enable selected-element capture and preview while keeping file saving unavailable.
+
+- Add practical tutorials for capture, editing, compression, custom filters, AI connections and managed-browser policies, with an index and a README entry point.
+
+- Keep native MCP tool discovery stable before browser setup and across tab grants, so clients that cache tools can discover supported writes while execution still checks current access.
+
+- Restore Maximum packing on pages with placeholders, accessible descriptions or inline errors. Preserve those fields as quoted attributes, distinguish them in subtree templates, and prevent shorthand from dropping them. Keep action-reference and MCP Write safety fallbacks.
+
+- Update the extension to 2.2.8, all five native AI-app packages to 1.2.8 and the shared helper to 0.2.5. These source versions do not imply GitHub publication or store approval.
 
 ### 2.2.7 — 2026-11-13
 

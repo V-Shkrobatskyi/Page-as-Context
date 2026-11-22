@@ -1,5 +1,7 @@
 # Data controls and local diagnostics
 
+This guide applies to extension **2.2.8**. Native AI-app packages **1.2.8** advertise supported MCP tools before a tab is shared; discovery grants no access and execution still enforces current client, tab, write and organization permissions.
+
 Open **Data controls** from the popup. This page is available even when your organization disables Customize or Preview. It does not grant access to those tools.
 
 ## Export data settings

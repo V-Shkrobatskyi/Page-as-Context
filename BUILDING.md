@@ -19,8 +19,8 @@ npm run zip:firefox
 ```
 
 The installed extension files are in `.output/firefox-mv3/`. The unsigned archive
-is `.output/page-as-context-2.2.7-firefox.zip`; the accompanying source archive is
-`.output/page-as-context-2.2.7-sources.zip`. Filenames use the package version, so
+is `.output/page-as-context-2.2.8-firefox.zip`; the accompanying source archive is
+`.output/page-as-context-2.2.8-sources.zip`. Filenames use the package version, so
 they change when the version changes. Compare uncompressed file paths and bytes
 with the submitted extension ZIP; ZIP container timestamps are not build content.
 
@@ -52,7 +52,7 @@ Full contributor checks run from the repository with `npm run check`.
 npm run zip
 ```
 
-The Chrome package is `.output/page-as-context-2.2.7-chrome.zip`, built from
+The Chrome package is `.output/page-as-context-2.2.8-chrome.zip`, built from
 `.output/chrome-mv3/`. Upload the extension ZIP, not the reviewer sources.
 
 ## Shared Firefox Desktop and Android package
@@ -63,7 +63,7 @@ ID and update stream. Upload the Firefox ZIP once to AMO and select Desktop and
 Android compatibility; do not upload separate platform variants.
 
 The popup detects the local platform at runtime. Desktop retains its 376px layout;
-Android uses responsive sizing and touch controls. Both support Copy. Firefox
+Android uses responsive sizing and touch controls. Both support whole-page and selected-element capture, Preview and Copy. Firefox
 Desktop requests the optional `downloads` permission when the user clicks Save;
 Android never requests it and keeps Save unavailable. Local platform detection
 failure also keeps Save unavailable while leaving Copy usable.
@@ -78,8 +78,8 @@ Build commands produce unsigned packages. Publishing and signing are covered in
 ## Simplified MCP packages
 
 ChatGPT, Claude Desktop/Code, Antigravity and GitHub Copilot app packages are
-aligned at **1.2.7**. The browser extension is **2.2.7** and the common helper
-is **0.2.4**. Client profiles and installation formats remain separate. Use the existing
+aligned at **1.2.8**. The browser extension is **2.2.8** and the common helper
+is **0.2.5**. Client profiles and installation formats remain separate. Use the existing
 ChatGPT builder with `--client claude-code` for the Claude Code package; see
 [integration build notes](integrations/claude/README.md). All packages use
 the same checksum-verified Node 24.10.0 archive. Icon variants can be regenerated

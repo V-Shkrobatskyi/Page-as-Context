@@ -58,7 +58,7 @@ Follow the [Desktop](firefox-desktop-testing.md) and
 Desktop Save, both formats, all profiles, Unicode, redaction, settings, restricted
 pages and navigation during capture. On Chrome, check debugger detach. On Firefox
 Desktop, check download permission approval, denial and retry and the separate
-save tab. Android must remain Copy-only without download permission prompts.
+save tab. Android must support Copy, Preview and element selection without download permission prompts; file saving remains unavailable.
 Record actual browser/device versions and results in the release PR. Repeat
 relevant checks after further code changes.
 
