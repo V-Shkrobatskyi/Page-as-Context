@@ -23,8 +23,10 @@ export async function serveMcp(config, credential, input = process.stdin, output
   const tools = toolCatalog();
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     if (spike) return { tools: [probeTool] };
-    const allowed = await bridge.request({ tool: 'list-tools', arguments: {} }).catch(() => undefined);
-    return { tools: [...tools.filter(tool => allowed?.tools?.includes(tool.name) ?? tool.annotations.readOnlyHint), ...(options.setup?.tools ?? [])] };
+    // Preserve lazy bridge startup, but never let transient tab grants or an
+    // unavailable browser remove supported operations from a cached catalog.
+    await bridge.request({ tool: 'list-tools', arguments: {} }).catch(() => undefined);
+    return { tools: [...tools, ...(options.setup?.tools ?? [])] };
   });
   server.setRequestHandler(CallToolRequestSchema, async request => {
     const args = request.params.arguments;

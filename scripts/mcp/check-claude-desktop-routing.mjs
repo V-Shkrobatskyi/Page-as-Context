@@ -16,16 +16,16 @@ const { createDesktopServer } = await from('desktop-server.mjs');
 const { toolCatalog } = await from('helper/src/catalog.mjs');
 const names = toolCatalog().map(tool => tool.name);
 const models = Object.fromEntries(['chrome', 'firefox'].map(browser => [browser, {
-  calls: [], listeners: new Set(), connected: browser === 'chrome', fail: false, closed: false, setupClosed: false,
+  calls: [], listeners: new Set(), connected: browser === 'chrome', writeAllowed: false, fail: false, closed: false, setupClosed: false,
 }]));
 const routes = Object.fromEntries(Object.entries(models).map(([browser, model]) => [browser, {
   bridge: {
     async request(request) {
       model.calls.push(request);
       if (!model.connected || model.fail) throw new Error('not-connected');
-      if (request.tool === 'list-tools') return { tools: names };
+      if (request.tool === 'list-tools') return { tools: toolCatalog().filter(tool => model.writeAllowed || tool.annotations.readOnlyHint).map(tool => tool.name) };
       if (request.tool === 'read_page_context' || request.tool === 'read_target_context') return { context: browser, connectionId: request.arguments.connectionId };
-      return { status: 'applied', operationId: request.arguments.operationId };
+      return model.writeAllowed ? { status: 'applied', operationId: request.arguments.operationId } : { error: 'read-only' };
     },
     onToolsChanged(listener) { model.listeners.add(listener); return () => model.listeners.delete(listener); },
     close() { model.closed = true; },
@@ -41,20 +41,34 @@ const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 const client = new Client({ name: 'dual-browser-routing-check', version: '1' });
 try {
   await session.server.connect(serverTransport); await client.connect(clientTransport);
-  const initial = (await client.listTools()).tools.map(tool => tool.name);
-  assert.ok(initial.includes('chrome_fill_element'));
-  assert.ok(initial.includes('firefox_read_page_context'));
-  assert.ok(!initial.includes('firefox_fill_element'), 'Unconfigured Firefox must not inherit Chrome write capability.');
+  const initial = (await client.listTools()).tools;
+  assert.deepEqual(initial.map(tool => tool.name), ['chrome', 'firefox'].flatMap(browser => [...names, 'setup_status'].map(name => `${browser}_${name}`)));
+  const call = (name, args = {}) => client.callTool({ name, arguments: args });
+  const decode = value => JSON.parse(value.content[0].text);
+  const connectionId = 'same_connection_00001';
+  const fillArgs = () => ({ connectionId, snapshotId: randomUUID(), elementRef: randomUUID(), operationId: randomUUID(), text: 'Fixture' });
+  const chromeBeforeOffline = models.chrome.calls.length;
+  const offlineWrite = await call('firefox_fill_element', fillArgs());
+  assert.equal(offlineWrite.isError, true);
+  assert.equal(decode(offlineWrite).status, 'outcome-unknown');
+  assert.equal(models.chrome.calls.length, chromeBeforeOffline, 'An unavailable browser never falls back to the other route.');
   let notifications = 0;
   client.setNotificationHandler(ToolListChangedNotificationSchema, () => { notifications++; });
   models.firefox.connected = true;
   for (const notify of models.firefox.listeners) notify();
   await new Promise(resolve => setTimeout(resolve, 30));
   assert.ok(notifications > 0);
-  assert.ok((await client.listTools()).tools.some(tool => tool.name === 'firefox_fill_element'));
-  const call = (name, args = {}) => client.callTool({ name, arguments: args });
-  const decode = value => JSON.parse(value.content[0].text);
-  const connectionId = 'same_connection_00001';
+  assert.deepEqual((await client.listTools()).tools, initial);
+  for (const browser of ['chrome', 'firefox']) {
+    const denied = await call(`${browser}_fill_element`, fillArgs());
+    assert.equal(denied.isError, true); assert.equal(decode(denied).error, 'read-only');
+  }
+  models.chrome.writeAllowed = true;
+  assert.equal(decode(await call('chrome_fill_element', fillArgs())).status, 'applied');
+  assert.equal(decode(await call('firefox_fill_element', fillArgs())).error, 'read-only', 'Chrome access never grants Firefox access.');
+  assert.deepEqual((await client.listTools()).tools, initial);
+  models.chrome.writeAllowed = false;
+  assert.equal(decode(await call('chrome_fill_element', fillArgs())).error, 'read-only');
   for (const browser of ['chrome', 'firefox']) assert.equal(decode(await call(`${browser}_read_page_context`, { connectionId })).context, browser);
   for (const browser of ['chrome', 'firefox']) assert.equal(decode(await call(`${browser}_read_target_context`, { connectionId, target: { role: 'button', name: 'Next' } })).context, browser);
   const otherCalls = models.firefox.calls.length;
@@ -65,6 +79,7 @@ try {
   assert.equal(write.status, 'outcome-unknown'); assert.equal(write.operationId, operationId);
   assert.equal(models.chrome.calls.length, before + 1, 'Never replay an uncertain write.');
   assert.equal(models.firefox.calls.length, otherCalls, 'No read or write fallback to the other browser.');
+  assert.deepEqual((await client.listTools()).tools, initial);
   await assert.rejects(call('read_page_context', { connectionId }));
   await assert.rejects(call('firefox_read_page_context', { connectionId, browser: 'chrome' }));
   const pending = await call('firefox_setup_status');
@@ -84,10 +99,12 @@ try {
     await code.connect(new StdioClientTransport({ command: join(plugin, 'runtime/node'),
       args: [join(plugin, 'server.mjs'), 'chrome', '--client', 'code', '--directory', root, '--manifest-home', join(root, 'home')], stderr: 'pipe' }));
     const tools = (await code.listTools()).tools;
-    assert.equal(tools.length, 10); assert.ok(tools.some(tool => tool.name === 'setup_status'));
+    assert.equal(tools.length, names.length + 5); assert.ok(tools.some(tool => tool.name === 'setup_status'));
+    assert.ok(tools.some(tool => tool.name === 'write_elements'), 'Claude Code must advertise writes before setup.');
     assert.ok(tools.every(tool => !tool.name.startsWith('chrome_') && !tool.name.startsWith('firefox_')));
   } finally { await code.close(); }
 } finally { await rm(root, { recursive: true, force: true }); }
 console.log(JSON.stringify({ passed: true, concurrentBrowserRoutes: true, perBrowserWriteGating: true,
+  stableCatalogBeforeSetupAndAcrossGrants: true,
   noCrossBrowserFallbackOrReplay: true, identicalConnectionIdsIsolated: true, toolListChangeNotification: true,
   pendingSetupNotError: true, invalidRoutesAndArgumentsRejected: true, bothRoutesClosed: true, claudeCodeUnchanged: true }));

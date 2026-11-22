@@ -1,3 +1,4 @@
+import { toolCatalog } from '../../helper/src/catalog.mjs';
 // Copyright (c) 2026 Vitalii Shkrobatskyi; SPDX-License-Identifier: GPL-3.0-only
 import assert from 'node:assert/strict';
 import { checkProfileSwitch } from './check-profile-switch.mjs';
@@ -82,7 +83,9 @@ try {
   };
   client = await connect();
   assert.equal(client.getServerVersion().version, release.version);
-  assert.equal((await client.listTools()).tools.length, 10);
+  const initialTools = (await client.listTools()).tools;
+  assert.equal(initialTools.length, toolCatalog().length + 5);
+  assert.ok(initialTools.some(tool => tool.name === 'write_elements'), 'Writes must be discoverable before browser setup.');
   const setupStatus = JSON.parse((await client.callTool({ name: 'setup_status', arguments: {} })).content[0].text);
   assert.equal(setupStatus.nativeInstalled, false);
   assert.equal((await client.callTool({ name: 'read_page_context', arguments: { connectionId: 'synthetic_connection_001' } })).isError, true);

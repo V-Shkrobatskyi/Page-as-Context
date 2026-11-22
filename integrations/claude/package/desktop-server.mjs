@@ -25,8 +25,9 @@ export function createDesktopServer({ routes, version }) {
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const groups = await Promise.all(browsers.map(async browser => {
       const route = routes[browser];
-      const allowed = await route.bridge.request({ tool: 'list-tools', arguments: {} }).catch(() => undefined);
-      const tools = [...pageTools.filter(tool => allowed?.tools?.includes(tool.name) ?? tool.annotations.readOnlyHint), ...route.setup.tools];
+      // Discovery describes supported operations, not this browser's live grants.
+      await route.bridge.request({ tool: 'list-tools', arguments: {} }).catch(() => undefined);
+      const tools = [...pageTools, ...route.setup.tools];
       return tools.map(tool => ({ ...tool, name: `${browser}_${tool.name}`, description: `${browser === 'chrome' ? 'Chrome' : 'Firefox'}: ${tool.description}` }));
     }));
     return { tools: groups.flat() };

@@ -17,6 +17,7 @@ import { install, uninstall } from '../src/install.mjs';
 import { brokerReady } from '../src/startup.mjs';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { toolCatalog } from '../src/catalog.mjs';
 
 const caller = 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/';
 const instanceId = 'synthetic_instance_001';
@@ -136,21 +137,42 @@ test('SDK client launches actual stdio helper, negotiates supported protocol and
   assert.equal(JSON.parse(result.content[0].text).nonce, 'synthetic_nonce_005');
   await assert.rejects(client.callTool({ name: 'transport_probe', arguments: { nonce: 'synthetic_nonce_005', tabId: 1 } }));
 });
-test('production tool discovery respects the browser catalog and still rejects cached write calls', async t => {
+test('production catalog stays stable through tab grants while writes use current authorization', async t => {
   const config = await fixture(t);
+  let allowedTools = [], writeAllowed = false;
   await endpoint(t, config, instanceId, { answer: (message, socket) => {
-    const result = message.request.tool === 'list-tools' ? { tools: ['get_connection_status', 'read_page_context'] } : { error: 'read-only' };
+    const { tool, arguments: args } = message.request;
+    const result = tool === 'list-tools' ? { tools: allowedTools }
+      : writeAllowed ? { status: 'applied', operationId: args.operationId } : { error: 'read-only' };
     for (const chunk of resultChunks(message.id, result)) writeFrame(socket, chunk);
   } });
   const path = join(config.directory, 'client.json'); await createPrivateJson(path, credential());
   const client = new Client({ name: 'stable-catalog-test', version: '1' }); t.after(() => client.close());
   await client.connect(new StdioClientTransport({ command: process.execPath, args: [new URL('../src/cli.mjs', import.meta.url).pathname, 'stdio', '--directory', config.directory, '--credential', path], stderr: 'pipe' }));
   const discovered = (await client.listTools()).tools.map(tool => tool.name);
-  assert.deepEqual(discovered, ['get_connection_status', 'read_page_context']);
-  const result = await client.callTool({ name: 'click_element', arguments: { connectionId: randomUUID(), snapshotId: randomUUID(), elementRef: randomUUID(), operationId: randomUUID() } });
+  assert.deepEqual(discovered, toolCatalog().map(tool => tool.name));
+  const write = () => client.callTool({ name: 'click_element', arguments: { connectionId: randomUUID(), snapshotId: randomUUID(), elementRef: randomUUID(), operationId: randomUUID() } });
+  const result = await write();
   assert.equal(result.isError, true);
   assert.deepEqual(JSON.parse(result.content[0].text), { error: 'read-only' });
+  allowedTools = ['get_connection_status', 'read_page_context'];
   assert.deepEqual((await client.listTools()).tools.map(tool => tool.name), discovered);
+  allowedTools = discovered; writeAllowed = true;
+  assert.deepEqual((await client.listTools()).tools.map(tool => tool.name), discovered);
+  assert.equal(JSON.parse((await write()).content[0].text).status, 'applied');
+  allowedTools = []; writeAllowed = false;
+  assert.deepEqual((await client.listTools()).tools.map(tool => tool.name), discovered);
+  assert.deepEqual(JSON.parse((await write()).content[0].text), { error: 'read-only' });
+});
+test('production discovery includes writes with no browser endpoint and calls remain unavailable', async t => {
+  const config = await fixture(t);
+  const path = join(config.directory, 'client.json'); await createPrivateJson(path, credential());
+  const client = new Client({ name: 'offline-catalog-test', version: '1' }); t.after(() => client.close());
+  await client.connect(new StdioClientTransport({ command: process.execPath, args: [new URL('../src/cli.mjs', import.meta.url).pathname, 'stdio', '--directory', config.directory, '--credential', path], stderr: 'pipe' }));
+  assert.deepEqual((await client.listTools()).tools.map(tool => tool.name), toolCatalog().map(tool => tool.name));
+  const result = await client.callTool({ name: 'read_page_context', arguments: { connectionId: randomUUID() } });
+  assert.equal(result.isError, true);
+  assert.equal(JSON.parse(result.content[0].text).error, 'not-connected');
 });
 for (const name of ['click_element', 'write_elements']) test(`SDK ${name} reports unknown outcome when the native endpoint loses its reply`, async t => {
   const config = await fixture(t);
